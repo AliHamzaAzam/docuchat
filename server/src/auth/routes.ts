@@ -42,11 +42,30 @@ authRouter.post('/register', async (req, res) => {
   const existing = await UserModel.findOne({ email: String(email).toLowerCase() })
   if (existing) return res.status(409).json({ error: 'That email is already registered.' })
 
-  const user = await UserModel.create({
-    email: String(email).toLowerCase(),
-    passwordHash: await bcrypt.hash(String(password), 10),
-    role: await claimAdminRole(),
-  })
+  const role = await claimAdminRole()
+
+  let user
+  try {
+    user = await UserModel.create({
+      email: String(email).toLowerCase(),
+      passwordHash: await bcrypt.hash(String(password), 10),
+      role,
+    })
+  } catch (err: any) {
+    // Creation failed after the claim was taken. The likeliest cause is a
+    // concurrent registration of the same email winning the unique index,
+    // because the duplicate check above is itself a read-then-write race.
+    // Release the claim so a later registration can still bootstrap an admin.
+    // Without this the collection could end up with no admin at all and no
+    // recovery short of manually deleting the sentinel.
+    if (role === 'admin') {
+      await BootstrapModel.deleteOne({ _id: ADMIN_CLAIM_ID })
+    }
+    if (err?.code === 11000) {
+      return res.status(409).json({ error: 'That email is already registered.' })
+    }
+    throw err
+  }
 
   res.status(201).json({
     token: signToken({ userId: String(user._id), role: user.role as 'admin' | 'user' }),
