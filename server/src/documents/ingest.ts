@@ -48,7 +48,15 @@ export async function ingestDocument(
     // rate limit that survived every retry). Remove any chunks already stored
     // for this document so a failed ingest leaves nothing the retriever would
     // still surface, then record the failure on the document.
-    await ChunkModel.deleteMany({ documentId })
+    //
+    // Guard the cleanup so that even if it fails, the document is still marked
+    // error. A document stuck in processing makes the admin page poll forever,
+    // and an unhandled rejection would escape the fire-and-forget ingest call.
+    try {
+      await ChunkModel.deleteMany({ documentId })
+    } catch {
+      // Best effort. Fall through and still record the error below.
+    }
     await DocumentModel.findByIdAndUpdate(documentId, {
       status: 'error',
       chunkCount: 0,

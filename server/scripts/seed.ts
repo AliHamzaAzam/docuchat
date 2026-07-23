@@ -20,9 +20,23 @@ async function main() {
   await UserModel.deleteMany({})
   await BootstrapModel.deleteMany({})
 
+  // The admin password comes from the environment, never a committed default.
+  // This repository is public and the deployed demo IS the live instance, so a
+  // hardcoded admin password would let anyone reading the repo log in as admin
+  // and deface the corpus. The "Enter demo" button uses the separate demo user
+  // account (below) and needs no password.
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD
+  if (!adminPassword) {
+    console.error(
+      'SEED_ADMIN_PASSWORD is not set. Set it before seeding so the admin account does not use a value from the repository.',
+    )
+    await disconnectDb()
+    process.exit(1)
+  }
+
   const admin = await UserModel.create({
     email: 'admin@docuchat.app',
-    passwordHash: await bcrypt.hash('demo-admin-password', 10),
+    passwordHash: await bcrypt.hash(adminPassword, 10),
     role: 'admin',
   })
 

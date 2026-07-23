@@ -22,12 +22,18 @@ Requirements: Node 20+, a free MongoDB Atlas cluster, a free Gemini API key.
 ```bash
 # API
 cd server
-cp .env.example .env      # fill in MONGODB_URI, GEMINI_API_KEY, JWT_SECRET
+cp .env.example .env      # fill in MONGODB_URI, GEMINI_API_KEY, JWT_SECRET, SEED_ADMIN_PASSWORD
 npm install
 npm run verify:vector     # confirms Atlas vector search works
 npm run seed              # demo account and sample documents
 npm run dev
 
+```
+
+`SEED_ADMIN_PASSWORD` sets the password for the admin account created by
+`npm run seed`. It has no default and must be chosen by the operator.
+
+```bash
 # Web
 cd client
 cp .env.example .env

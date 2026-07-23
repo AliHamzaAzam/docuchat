@@ -53,22 +53,13 @@ conversationsRouter.post('/chat', requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Please enter a question.' })
   }
 
-  let convo = conversationId
+  // Resolve an existing conversation up front, but do not create one yet.
+  // Nothing is persisted until we have a successful answer, so a failed or
+  // rate-limited generation never leaves an orphan conversation or a lone
+  // user message with no reply.
+  const existing = conversationId
     ? await ConversationModel.findOne({ _id: conversationId, userId: req.user!.userId })
     : null
-
-  if (!convo) {
-    convo = await ConversationModel.create({
-      userId: req.user!.userId,
-      title: titleFrom(String(question)),
-    })
-  }
-
-  await MessageModel.create({
-    conversationId: convo._id,
-    role: 'user',
-    content: String(question),
-  })
 
   let result
   try {
@@ -83,6 +74,19 @@ conversationsRouter.post('/chat', requireAuth, async (req, res) => {
         : 'The assistant could not answer that. Please try again.',
     })
   }
+
+  const convo =
+    existing ??
+    (await ConversationModel.create({
+      userId: req.user!.userId,
+      title: titleFrom(String(question)),
+    }))
+
+  await MessageModel.create({
+    conversationId: convo._id,
+    role: 'user',
+    content: String(question),
+  })
 
   const assistantMessage = await MessageModel.create({
     conversationId: convo._id,

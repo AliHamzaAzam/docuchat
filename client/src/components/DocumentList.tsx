@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { api } from '../api/client'
 
 export type DocumentSummary = {
@@ -17,10 +18,17 @@ export function DocumentList({
   documents: DocumentSummary[]
   onChanged: () => void
 }) {
+  const [error, setError] = useState<string | null>(null)
+
   async function remove(id: string, filename: string) {
     if (!confirm(`Delete "${filename}"? Its content will no longer be used in answers.`)) return
-    await api.del(`/api/documents/${id}`)
-    onChanged()
+    setError(null)
+    try {
+      await api.del(`/api/documents/${id}`)
+      onChanged()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not delete that document.')
+    }
   }
 
   if (documents.length === 0) {
@@ -29,6 +37,7 @@ export function DocumentList({
 
   return (
     <div>
+      {error && <p className="error">{error}</p>}
       {documents.map((doc) => (
         <div className="doc-row" key={doc.id}>
           <div>
