@@ -2,6 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { buildVectorPipeline, mapAggregateRow } from '../src/rag/retriever.js'
 
 describe('buildVectorPipeline', () => {
+  it('puts $vectorSearch first, which MongoDB requires', () => {
+    const pipeline = buildVectorPipeline([0.1], 4)
+    expect(Object.keys(pipeline[0])).toEqual(['$vectorSearch'])
+  })
+
   it('targets the vector index with the query vector and limit', () => {
     const vector = [0.1, 0.2, 0.3]
     const pipeline = buildVectorPipeline(vector, 4)
@@ -11,13 +16,34 @@ describe('buildVectorPipeline', () => {
     expect(stage.$vectorSearch.path).toBe('embedding')
     expect(stage.$vectorSearch.queryVector).toEqual(vector)
     expect(stage.$vectorSearch.limit).toBe(4)
-    expect(stage.$vectorSearch.numCandidates).toBeGreaterThanOrEqual(4)
   })
 
-  it('joins documents so the filename is available for citations', () => {
+  it('oversamples candidates by the multiplier so recall stays useful', () => {
+    const stage = buildVectorPipeline([0.1], 4)[0] as any
+    expect(stage.$vectorSearch.numCandidates).toBe(80)
+  })
+
+  it('applies the candidate floor when k is small', () => {
+    const stage = buildVectorPipeline([0.1], 1)[0] as any
+    expect(stage.$vectorSearch.numCandidates).toBe(50)
+  })
+
+  it('joins documents on the id so the filename is available for citations', () => {
     const pipeline = buildVectorPipeline([0.1], 2)
     const lookup = pipeline.find((s: any) => s.$lookup) as any
-    expect(lookup.$lookup.from).toBe('documents')
+    expect(lookup.$lookup).toEqual({
+      from: 'documents',
+      localField: 'documentId',
+      foreignField: '_id',
+      as: 'document',
+    })
+  })
+
+  it('projects what mapAggregateRow reads and excludes the embedding', () => {
+    const pipeline = buildVectorPipeline([0.1], 2)
+    const project = pipeline.find((s: any) => s.$project) as any
+    expect(project.$project['document.filename']).toBe(1)
+    expect(project.$project.embedding).toBeUndefined()
   })
 })
 
