@@ -1,5 +1,11 @@
 import { describe, it, expect, vi } from 'vitest'
-import { withRetry, isRateLimitError } from '../src/rag/provider.js'
+import {
+  withRetry,
+  isRateLimitError,
+  assertCompleteEmbeddings,
+  IncompleteEmbeddingError,
+  isRetryableError,
+} from '../src/rag/provider.js'
 
 describe('isRateLimitError', () => {
   it('recognises a 429 status', () => {
@@ -54,5 +60,39 @@ describe('withRetry', () => {
 
     expect(fn).toHaveBeenCalledTimes(3)
     vi.useRealTimers()
+  })
+})
+
+describe('assertCompleteEmbeddings', () => {
+  const good = () => Array.from({ length: 768 }, () => 0.1)
+
+  it('accepts vectors of the right count and dimension', () => {
+    expect(() => assertCompleteEmbeddings([good(), good()], 2)).not.toThrow()
+  })
+
+  it('rejects an empty vector, which is what a swallowed rate limit produces', () => {
+    expect(() => assertCompleteEmbeddings([[]], 1)).toThrow(IncompleteEmbeddingError)
+  })
+
+  it('rejects a wrong-dimension vector', () => {
+    expect(() => assertCompleteEmbeddings([[0.1, 0.2, 0.3]], 1)).toThrow(IncompleteEmbeddingError)
+  })
+
+  it('rejects a short count', () => {
+    expect(() => assertCompleteEmbeddings([good()], 2)).toThrow(IncompleteEmbeddingError)
+  })
+})
+
+describe('isRetryableError', () => {
+  it('retries rate limits', () => {
+    expect(isRetryableError({ status: 429 })).toBe(true)
+  })
+
+  it('retries incomplete embeddings, since they are transient on the free tier', () => {
+    expect(isRetryableError(new IncompleteEmbeddingError('empty'))).toBe(true)
+  })
+
+  it('does not retry an ordinary error', () => {
+    expect(isRetryableError(new Error('bad api key'))).toBe(false)
   })
 })

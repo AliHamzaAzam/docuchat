@@ -44,8 +44,14 @@ export async function ingestDocument(
       chunkCount: chunks.length,
     })
   } catch (err) {
+    // A batch may have inserted before a later batch failed (for example a
+    // rate limit that survived every retry). Remove any chunks already stored
+    // for this document so a failed ingest leaves nothing the retriever would
+    // still surface, then record the failure on the document.
+    await ChunkModel.deleteMany({ documentId })
     await DocumentModel.findByIdAndUpdate(documentId, {
       status: 'error',
+      chunkCount: 0,
       error: err instanceof Error ? err.message : 'Processing failed.',
     })
   }

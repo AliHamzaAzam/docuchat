@@ -1,6 +1,7 @@
 import { GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI } from '@langchain/google-genai'
 import { env } from '../config/env.js'
 import type { EmbeddingProvider, LlmProvider } from './types.js'
+import { EMBEDDING_DIMENSIONS } from './types.js'
 
 // Swapping providers happens here and nowhere else. To move to OpenAI,
 // install @langchain/openai and replace the two implementations below.
@@ -9,6 +10,40 @@ export function isRateLimitError(err: unknown): boolean {
   const status = (err as { status?: number })?.status
   const message = String((err as { message?: string })?.message ?? '')
   return status === 429 || /quota|rate.?limit|too many requests/i.test(message)
+}
+
+/**
+ * Raised when the embedding provider returns a vector of the wrong shape.
+ * The installed @langchain/google-genai swallows a failed batch and returns
+ * empty arrays rather than throwing, so without this check a rate-limited
+ * ingest would silently persist empty embeddings and mark the document ready.
+ */
+export class IncompleteEmbeddingError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'IncompleteEmbeddingError'
+  }
+}
+
+// Both conditions are transient on the free tier, so both should be retried.
+export function isRetryableError(err: unknown): boolean {
+  return isRateLimitError(err) || err instanceof IncompleteEmbeddingError
+}
+
+/** Throw unless every vector has the expected dimension and none is empty. */
+export function assertCompleteEmbeddings(vectors: number[][], expectedCount: number): void {
+  if (vectors.length !== expectedCount) {
+    throw new IncompleteEmbeddingError(
+      `Expected ${expectedCount} embeddings but received ${vectors.length}.`,
+    )
+  }
+  for (const vector of vectors) {
+    if (!Array.isArray(vector) || vector.length !== EMBEDDING_DIMENSIONS) {
+      throw new IncompleteEmbeddingError(
+        `The embedding provider returned an empty or wrong-size vector. This usually means a rate limit or a transient API error.`,
+      )
+    }
+  }
 }
 
 /**
@@ -24,7 +59,7 @@ export async function withRetry<T>(fn: () => Promise<T>, attempts = 4): Promise<
       return await fn()
     } catch (err) {
       lastError = err
-      if (!isRateLimitError(err) || attempt === attempts - 1) throw err
+      if (!isRetryableError(err) || attempt === attempts - 1) throw err
       const delay = 1000 * 2 ** attempt
       await new Promise((resolve) => setTimeout(resolve, delay))
     }
@@ -40,11 +75,19 @@ class GeminiEmbeddings implements EmbeddingProvider {
   })
 
   async embed(texts: string[]): Promise<number[][]> {
-    return withRetry(() => this.client.embedDocuments(texts))
+    return withRetry(async () => {
+      const vectors = await this.client.embedDocuments(texts)
+      assertCompleteEmbeddings(vectors, texts.length)
+      return vectors
+    })
   }
 
   async embedOne(text: string): Promise<number[]> {
-    return withRetry(() => this.client.embedQuery(text))
+    return withRetry(async () => {
+      const vector = await this.client.embedQuery(text)
+      assertCompleteEmbeddings([vector], 1)
+      return vector
+    })
   }
 }
 
