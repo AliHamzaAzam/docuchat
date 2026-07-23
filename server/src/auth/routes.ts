@@ -1,11 +1,34 @@
 import { Router } from 'express'
 import bcrypt from 'bcryptjs'
 import { UserModel } from '../models/User.js'
+import { BootstrapModel, ADMIN_CLAIM_ID } from '../models/Bootstrap.js'
 import { signToken } from './jwt.js'
 
 export const authRouter = Router()
 
 const DEMO_EMAIL = 'demo@docuchat.app'
+
+/**
+ * Decide whether this registration becomes the admin.
+ *
+ * Reading a count and then writing would be a time-of-check-to-time-of-use
+ * race: two concurrent first registrations could both observe an empty
+ * collection and both become admin. Instead the claim is a single insert of a
+ * fixed-id sentinel. The unique _id means exactly one insert can ever succeed,
+ * so exactly one account is ever promoted at bootstrap.
+ *
+ * Any failure returns 'user', so the failure mode is too few admins rather
+ * than too many. If a claim is consumed without a user being created, delete
+ * the sentinel document to allow the next registration to claim it.
+ */
+async function claimAdminRole(): Promise<'admin' | 'user'> {
+  try {
+    await BootstrapModel.create({ _id: ADMIN_CLAIM_ID })
+    return 'admin'
+  } catch {
+    return 'user'
+  }
+}
 
 authRouter.post('/register', async (req, res) => {
   const { email, password } = req.body ?? {}
@@ -19,11 +42,10 @@ authRouter.post('/register', async (req, res) => {
   const existing = await UserModel.findOne({ email: String(email).toLowerCase() })
   if (existing) return res.status(409).json({ error: 'That email is already registered.' })
 
-  const isFirstUser = (await UserModel.countDocuments()) === 0
   const user = await UserModel.create({
     email: String(email).toLowerCase(),
     passwordHash: await bcrypt.hash(String(password), 10),
-    role: isFirstUser ? 'admin' : 'user',
+    role: await claimAdminRole(),
   })
 
   res.status(201).json({
