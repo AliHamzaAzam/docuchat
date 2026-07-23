@@ -1,6 +1,10 @@
 const BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:4000'
 
-let authToken: string | null = null
+// Seed the token synchronously at module load, so the first request after a
+// page refresh carries it. Relying only on a provider useEffect would attach
+// the token too late: child components' mount effects fire before the
+// provider's, so their first authenticated request would go out unauthenticated.
+let authToken: string | null = localStorage.getItem('token')
 export function setAuthToken(token: string | null) {
   authToken = token
 }
