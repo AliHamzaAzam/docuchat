@@ -9,7 +9,12 @@ export type ChatMessageData = {
 }
 
 export function ChatMessage({ message }: { message: ChatMessageData }) {
-  const ungrounded = message.role === 'assistant' && message.grounded === false
+  // Derive the ungrounded state from the sources, not the grounded flag. A
+  // grounded answer always has retrieved chunks (non-empty sources); an
+  // ungrounded "I do not know" answer always has none. History messages from
+  // GET /api/conversations/:id do not carry the grounded flag, so relying on it
+  // would silently drop the ungrounded styling after a reload.
+  const ungrounded = message.role === 'assistant' && message.sources.length === 0
 
   return (
     <div className={`message ${message.role}${ungrounded ? ' ungrounded' : ''}`}>

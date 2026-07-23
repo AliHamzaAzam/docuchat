@@ -22,8 +22,12 @@ export function ChatPage() {
   async function openConversation(id: string) {
     setActiveId(id)
     setError(null)
-    const convo = await api.get(`/api/conversations/${id}`)
-    setMessages(convo.messages)
+    try {
+      const convo = await api.get(`/api/conversations/${id}`)
+      setMessages(convo.messages)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not open that conversation.')
+    }
   }
 
   function newChat() {
