@@ -1,0 +1,16 @@
+Northwind Robotics Product FAQ
+
+What is the warranty period?
+All robotics units carry a 24 month warranty covering manufacturing defects.
+Damage from misuse is not covered.
+
+How long does shipping take?
+Standard shipping takes 5 to 7 working days. Express shipping takes 2 working
+days and costs an additional 40 dollars.
+
+Can I return a unit?
+Units may be returned within 30 days of delivery in their original packaging for
+a full refund.
+
+What power supply is required?
+All units run on 110 to 240 volts and ship with a region-appropriate adapter.

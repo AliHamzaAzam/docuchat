@@ -10,7 +10,8 @@
     "start": "node dist/src/index.js",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "verify:vector": "tsx scripts/verify-vector-search.ts"
+    "verify:vector": "tsx scripts/verify-vector-search.ts",
+    "seed": "tsx scripts/seed.ts"
   },
   "keywords": [],
   "author": "",
