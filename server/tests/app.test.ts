@@ -28,4 +28,29 @@ describe('createApp', () => {
     expect(res.status).toBe(413)
     expect(res.body.error).toMatch(/too large/i)
   })
+
+  it('rejects an unauthenticated chat request with 401', async () => {
+    const app = createApp()
+    const res = await request(app).post('/api/conversations/chat').send({ question: 'hi' })
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects an unauthenticated conversation list with 401', async () => {
+    const app = createApp()
+    const res = await request(app).get('/api/conversations')
+    expect(res.status).toBe(401)
+  })
+
+  it('rejects an empty chat question with 400 before touching the database', async () => {
+    const app = createApp()
+    const token = signToken({ userId: 'user-id', role: 'user' })
+
+    const res = await request(app)
+      .post('/api/conversations/chat')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ question: '   ' })
+
+    expect(res.status).toBe(400)
+    expect(res.body.error).toMatch(/enter a question/i)
+  })
 })

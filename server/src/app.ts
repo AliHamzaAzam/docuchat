@@ -2,6 +2,7 @@ import express from 'express'
 import cors from 'cors'
 import { authRouter } from './auth/routes.js'
 import { documentsRouter } from './documents/routes.js'
+import { conversationsRouter } from './conversations/routes.js'
 
 export function createApp() {
   const app = express()
@@ -12,6 +13,7 @@ export function createApp() {
   app.get('/api/health', (_req, res) => res.json({ ok: true }))
   app.use('/api/auth', authRouter)
   app.use('/api/documents', documentsRouter)
+  app.use('/api/conversations', conversationsRouter)
 
   app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     if (err?.code === 'LIMIT_FILE_SIZE') {

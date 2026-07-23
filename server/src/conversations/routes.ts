@@ -1,0 +1,111 @@
+import { Router } from 'express'
+import { ConversationModel } from '../models/Conversation.js'
+import { MessageModel } from '../models/Message.js'
+import { requireAuth } from '../auth/middleware.js'
+import { answerQuestion } from '../rag/answer.js'
+import { isRateLimitError } from '../rag/provider.js'
+
+export const conversationsRouter = Router()
+
+function titleFrom(question: string): string {
+  return question.length > 60 ? `${question.slice(0, 60)}...` : question
+}
+
+conversationsRouter.get('/', requireAuth, async (req, res) => {
+  const list = await ConversationModel.find({ userId: req.user!.userId })
+    .sort({ updatedAt: -1 })
+    .lean()
+  res.json(list.map((c) => ({ id: String(c._id), title: c.title, updatedAt: c.updatedAt })))
+})
+
+conversationsRouter.get('/:id', requireAuth, async (req, res) => {
+  const convo = await ConversationModel.findOne({
+    _id: req.params.id,
+    userId: req.user!.userId,
+  }).lean()
+  if (!convo) return res.status(404).json({ error: 'Conversation not found.' })
+
+  const messages = await MessageModel.find({ conversationId: convo._id })
+    .sort({ createdAt: 1 })
+    .lean()
+
+  res.json({
+    id: String(convo._id),
+    title: convo.title,
+    messages: messages.map((m) => ({
+      id: String(m._id),
+      role: m.role,
+      content: m.content,
+      sources: (m.sources ?? []).map((s: any) => ({
+        documentId: String(s.documentId),
+        filename: s.filename,
+        chunkId: String(s.chunkId),
+        snippet: s.snippet,
+      })),
+      createdAt: m.createdAt,
+    })),
+  })
+})
+
+conversationsRouter.post('/chat', requireAuth, async (req, res) => {
+  const { question, conversationId } = req.body ?? {}
+  if (!question || !String(question).trim()) {
+    return res.status(400).json({ error: 'Please enter a question.' })
+  }
+
+  let convo = conversationId
+    ? await ConversationModel.findOne({ _id: conversationId, userId: req.user!.userId })
+    : null
+
+  if (!convo) {
+    convo = await ConversationModel.create({
+      userId: req.user!.userId,
+      title: titleFrom(String(question)),
+    })
+  }
+
+  await MessageModel.create({
+    conversationId: convo._id,
+    role: 'user',
+    content: String(question),
+  })
+
+  let result
+  try {
+    result = await answerQuestion(String(question))
+  } catch (err) {
+    // Retries are already exhausted inside the provider, so reaching here means
+    // the free tier is genuinely saturated rather than momentarily busy.
+    const rateLimited = isRateLimitError(err)
+    return res.status(rateLimited ? 429 : 500).json({
+      error: rateLimited
+        ? 'The assistant is busy right now. Please try again in a moment.'
+        : 'The assistant could not answer that. Please try again.',
+    })
+  }
+
+  const assistantMessage = await MessageModel.create({
+    conversationId: convo._id,
+    role: 'assistant',
+    content: result.answer,
+    sources: result.sources.map((s) => ({
+      documentId: s.documentId,
+      filename: s.filename,
+      chunkId: s.chunkId,
+      snippet: s.snippet,
+    })),
+  })
+
+  await ConversationModel.findByIdAndUpdate(convo._id, { updatedAt: new Date() })
+
+  res.json({
+    conversationId: String(convo._id),
+    message: {
+      id: String(assistantMessage._id),
+      role: 'assistant',
+      content: result.answer,
+      sources: result.sources,
+    },
+    grounded: result.grounded,
+  })
+})
