@@ -17,8 +17,11 @@ export function ChatMessage({ message }: { message: ChatMessageData }) {
   const ungrounded = message.role === 'assistant' && message.sources.length === 0
 
   return (
-    <div className={`message ${message.role}${ungrounded ? ' ungrounded' : ''}`}>
-      <div>{message.content}</div>
+    <div className={`message message-${message.role}${ungrounded ? ' message-ungrounded' : ''}`}>
+      {message.role === 'assistant' && (
+        <span className="message-label">{ungrounded ? "Couldn't find this" : 'Answer'}</span>
+      )}
+      <div className="message-content">{message.content}</div>
       <SourceChips sources={message.sources} />
     </div>
   )
