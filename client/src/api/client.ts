@@ -9,10 +9,39 @@ export function setAuthToken(token: string | null) {
   authToken = token
 }
 
+/**
+ * A failed API call. Carries the HTTP status and, when the server sent one,
+ * its machine-readable `code` (e.g. "RATE_LIMITED") so callers can branch on
+ * the failure kind instead of pattern-matching the message text.
+ */
+export class ApiError extends Error {
+  status: number
+  code: string | null
+
+  constructor(message: string, status: number, code: string | null) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
+// Set by the notification layer so every 429 across the app surfaces the same
+// friendly, non-blocking notice regardless of which call site triggered it.
+// A plain module-level hook (rather than importing React state here) keeps
+// this file framework-agnostic; components still receive the thrown ApiError
+// too, so a call site can layer its own handling on top when it needs to.
+let rateLimitHandler: ((error: ApiError) => void) | null = null
+export function setRateLimitHandler(handler: ((error: ApiError) => void) | null) {
+  rateLimitHandler = handler
+}
+
 async function handle(res: Response) {
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
-    throw new Error(body.error ?? 'Request failed. Please try again.')
+    const error = new ApiError(body.error ?? 'Request failed. Please try again.', res.status, body.code ?? null)
+    if (res.status === 429) rateLimitHandler?.(error)
+    throw error
   }
   return res.json()
 }
