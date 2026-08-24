@@ -94,7 +94,7 @@ class GeminiEmbeddings implements EmbeddingProvider {
 class GeminiLlm implements LlmProvider {
   private client = new ChatGoogleGenerativeAI({
     apiKey: env.GEMINI_API_KEY,
-    model: 'gemini-2.0-flash',
+    model: 'gemini-3.6-flash',
     temperature: 0,
   })
 
@@ -104,15 +104,96 @@ class GeminiLlm implements LlmProvider {
   }
 }
 
+/**
+ * Workers AI error responses carry HTTP status; surface it so
+ * isRateLimitError and withRetry treat 429s as transient.
+ */
+class WorkersAiRequestError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'WorkersAiRequestError'
+    this.status = status
+  }
+}
+
+async function workersAiRun<T>(model: string, body: unknown): Promise<T> {
+  const res = await fetch(
+    `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/ai/run/${model}`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${env.CLOUDFLARE_API_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  )
+  const json = (await res.json()) as {
+    success: boolean
+    result: T
+    errors?: { code: number; message: string }[]
+  }
+  if (!res.ok || !json.success) {
+    const detail = json.errors?.map((e) => e.message).join('; ') || res.statusText
+    throw new WorkersAiRequestError(res.status, `Workers AI ${model} failed: ${detail}`)
+  }
+  return json.result
+}
+
+// bge-base-en-v1.5 accepts at most 100 texts per request.
+const WORKERS_AI_EMBED_BATCH = 100
+
+class WorkersAiEmbeddings implements EmbeddingProvider {
+  private model = '@cf/baai/bge-base-en-v1.5'
+
+  async embed(texts: string[]): Promise<number[][]> {
+    const vectors: number[][] = []
+    for (let i = 0; i < texts.length; i += WORKERS_AI_EMBED_BATCH) {
+      const batch = texts.slice(i, i + WORKERS_AI_EMBED_BATCH)
+      const result = await withRetry(() =>
+        workersAiRun<{ data: number[][] }>(this.model, { text: batch }),
+      )
+      vectors.push(...result.data)
+    }
+    assertCompleteEmbeddings(vectors, texts.length)
+    return vectors
+  }
+
+  async embedOne(text: string): Promise<number[]> {
+    const [vector] = await this.embed([text])
+    return vector
+  }
+}
+
+class WorkersAiLlm implements LlmProvider {
+  private model = '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+
+  async generate(prompt: string): Promise<string> {
+    const result = await withRetry(() =>
+      workersAiRun<{ response: string }>(this.model, {
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0,
+        max_tokens: 1024,
+      }),
+    )
+    return result.response
+  }
+}
+
 let embeddings: EmbeddingProvider | null = null
 let llm: LlmProvider | null = null
 
 export function getEmbeddingProvider(): EmbeddingProvider {
-  if (!embeddings) embeddings = new GeminiEmbeddings()
+  if (!embeddings) {
+    embeddings = env.AI_PROVIDER === 'workers-ai' ? new WorkersAiEmbeddings() : new GeminiEmbeddings()
+  }
   return embeddings
 }
 
 export function getLlmProvider(): LlmProvider {
-  if (!llm) llm = new GeminiLlm()
+  if (!llm) {
+    llm = env.AI_PROVIDER === 'workers-ai' ? new WorkersAiLlm() : new GeminiLlm()
+  }
   return llm
 }
