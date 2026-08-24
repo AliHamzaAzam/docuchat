@@ -27,10 +27,10 @@ function toSources(chunks: RetrievedChunk[]): SourceRef[] {
 
 export async function answerQuestion(
   question: string,
-  deps: { retrieveFn?: typeof retrieve; llm?: LlmProvider; k?: number } = {},
+  deps: { retrieveFn?: typeof retrieve; llm?: LlmProvider; k?: number; demoSessionId?: string } = {},
 ): Promise<AnswerResult> {
   const retrieveFn = deps.retrieveFn ?? retrieve
-  const chunks = await retrieveFn(question, { k: deps.k })
+  const chunks = await retrieveFn(question, { k: deps.k, demoSessionId: deps.demoSessionId })
 
   if (chunks.length === 0) {
     return { answer: NO_CONTEXT_RESPONSE, sources: [], grounded: false }

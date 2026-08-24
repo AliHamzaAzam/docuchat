@@ -1,13 +1,18 @@
 import { ChunkModel } from '../models/Chunk.js'
 import { getEmbeddingProvider } from './provider.js'
 import type { EmbeddingProvider, RetrievedChunk } from './types.js'
+import { SHARED_SCOPE_KEY } from '../documents/scope.js'
 
 export const VECTOR_INDEX_NAME = 'chunk_vector_index'
 
 const DEFAULT_K = 5
 const CANDIDATE_MULTIPLIER = 20
 
-export function buildVectorPipeline(queryVector: number[], k: number): Record<string, unknown>[] {
+export function buildVectorPipeline(queryVector: number[], k: number, demoSessionId?: string): Record<string, unknown>[] {
+  const scopeFilter = demoSessionId
+    ? { scopeKey: { $in: [SHARED_SCOPE_KEY, demoSessionId] } }
+    : { scopeKey: SHARED_SCOPE_KEY }
+
   return [
     {
       $vectorSearch: {
@@ -16,6 +21,7 @@ export function buildVectorPipeline(queryVector: number[], k: number): Record<st
         queryVector,
         numCandidates: Math.max(k * CANDIDATE_MULTIPLIER, 50),
         limit: k,
+        filter: scopeFilter,
       },
     },
     {
@@ -50,12 +56,12 @@ export function mapAggregateRow(row: any): RetrievedChunk {
 
 export async function retrieve(
   question: string,
-  opts: { k?: number; embeddings?: EmbeddingProvider } = {},
+  opts: { k?: number; embeddings?: EmbeddingProvider; demoSessionId?: string } = {},
 ): Promise<RetrievedChunk[]> {
   const k = opts.k ?? DEFAULT_K
   const embeddings = opts.embeddings ?? getEmbeddingProvider()
   const queryVector = await embeddings.embedOne(question)
 
-  const rows = await ChunkModel.aggregate(buildVectorPipeline(queryVector, k) as any[])
+  const rows = await ChunkModel.aggregate(buildVectorPipeline(queryVector, k, opts.demoSessionId) as any[])
   return rows.map(mapAggregateRow)
 }

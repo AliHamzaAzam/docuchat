@@ -1,8 +1,11 @@
 import { Router } from 'express'
+import { randomUUID } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import { UserModel } from '../models/User.js'
 import { BootstrapModel, ADMIN_CLAIM_ID } from '../models/Bootstrap.js'
 import { signToken } from './jwt.js'
+import { authRateLimiter, demoLoginRateLimiter } from '../config/rateLimit.js'
+import { cleanupExpiredDemoUploads } from '../documents/cleanup.js'
 
 export const authRouter = Router()
 
@@ -30,7 +33,7 @@ async function claimAdminRole(): Promise<'admin' | 'user'> {
   }
 }
 
-authRouter.post('/register', async (req, res) => {
+authRouter.post('/register', authRateLimiter, async (req, res) => {
   const { email, password } = req.body ?? {}
   if (!email || !password) {
     return res.status(400).json({ error: 'Email and password are required.' })
@@ -73,7 +76,7 @@ authRouter.post('/register', async (req, res) => {
   })
 })
 
-authRouter.post('/login', async (req, res) => {
+authRouter.post('/login', authRateLimiter, async (req, res) => {
   const { email, password } = req.body ?? {}
   const user = await UserModel.findOne({ email: String(email ?? '').toLowerCase() })
   if (!user || !(await bcrypt.compare(String(password ?? ''), user.passwordHash))) {
@@ -85,11 +88,13 @@ authRouter.post('/login', async (req, res) => {
   })
 })
 
-authRouter.post('/demo', async (_req, res) => {
-  const user = await UserModel.findOne({ email: DEMO_EMAIL })
+authRouter.post('/demo', demoLoginRateLimiter, async (_req, res) => {
+  await cleanupExpiredDemoUploads()
+  const user = await UserModel.findOne({ email: DEMO_EMAIL, isDemo: true })
   if (!user) return res.status(503).json({ error: 'The demo account is not available.' })
+  const demoSessionId = randomUUID()
   res.json({
-    token: signToken({ userId: String(user._id), role: user.role as 'admin' | 'user' }),
+    token: signToken({ userId: String(user._id), role: user.role as 'admin' | 'user', demoSessionId }),
     user: { email: user.email, role: user.role },
   })
 })

@@ -9,6 +9,11 @@ describe('jwt', () => {
     expect(decoded.role).toBe('admin')
   })
 
+  it('preserves the demo session claim', () => {
+    const token = signToken({ userId: 'demo', role: 'user', demoSessionId: 'session-123' })
+    expect(verifyToken(token).demoSessionId).toBe('session-123')
+  })
+
   it('rejects a tampered token', () => {
     const token = signToken({ userId: 'abc123', role: 'user' })
     expect(() => verifyToken(`${token}tampered`)).toThrow()

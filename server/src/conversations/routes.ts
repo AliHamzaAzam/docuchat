@@ -4,6 +4,7 @@ import { MessageModel } from '../models/Message.js'
 import { requireAuth } from '../auth/middleware.js'
 import { answerQuestion } from '../rag/answer.js'
 import { isRateLimitError } from '../rag/provider.js'
+import { chatRateLimiter } from '../config/rateLimit.js'
 
 export const conversationsRouter = Router()
 
@@ -47,7 +48,7 @@ conversationsRouter.get('/:id', requireAuth, async (req, res) => {
   })
 })
 
-conversationsRouter.post('/chat', requireAuth, async (req, res) => {
+conversationsRouter.post('/chat', requireAuth, chatRateLimiter, async (req, res) => {
   const { question, conversationId } = req.body ?? {}
   if (!question || !String(question).trim()) {
     return res.status(400).json({ error: 'Please enter a question.' })
@@ -63,7 +64,7 @@ conversationsRouter.post('/chat', requireAuth, async (req, res) => {
 
   let result
   try {
-    result = await answerQuestion(String(question))
+    result = await answerQuestion(String(question), { demoSessionId: req.user!.demoSessionId })
   } catch (err) {
     // Retries are already exhausted inside the provider, so reaching here means
     // the free tier is genuinely saturated rather than momentarily busy.

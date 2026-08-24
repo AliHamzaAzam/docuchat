@@ -18,6 +18,16 @@ describe('buildVectorPipeline', () => {
     expect(stage.$vectorSearch.limit).toBe(4)
   })
 
+  it('filters ordinary retrieval to the shared corpus', () => {
+    const stage = buildVectorPipeline([0.1], 4)[0] as any
+    expect(stage.$vectorSearch.filter).toEqual({ scopeKey: 'shared' })
+  })
+
+  it('filters demo retrieval to shared and the current session', () => {
+    const stage = buildVectorPipeline([0.1], 4, 'demo-session')[0] as any
+    expect(stage.$vectorSearch.filter).toEqual({ scopeKey: { $in: ['shared', 'demo-session'] } })
+  })
+
   it('oversamples candidates by the multiplier so recall stays useful', () => {
     const stage = buildVectorPipeline([0.1], 4)[0] as any
     expect(stage.$vectorSearch.numCandidates).toBe(80)
