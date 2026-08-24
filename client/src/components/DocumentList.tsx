@@ -1,15 +1,8 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { DocumentRow, type DocumentSummary } from './DocumentRow'
 
-export type DocumentSummary = {
-  id: string
-  filename: string
-  status: 'processing' | 'ready' | 'error'
-  error: string | null
-  chunkCount: number
-  size: number
-  createdAt: string
-}
+export type { DocumentSummary }
 
 export function DocumentList({
   documents,
@@ -20,11 +13,11 @@ export function DocumentList({
 }) {
   const [error, setError] = useState<string | null>(null)
 
-  async function remove(id: string, filename: string) {
-    if (!confirm(`Delete "${filename}"? Its content will no longer be used in answers.`)) return
+  async function remove(doc: DocumentSummary) {
+    if (!confirm(`Delete "${doc.filename}"? Its content will no longer be used in answers.`)) return
     setError(null)
     try {
-      await api.del(`/api/documents/${id}`)
+      await api.del(`/api/documents/${doc.id}`)
       onChanged()
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not delete that document.')
@@ -32,29 +25,19 @@ export function DocumentList({
   }
 
   if (documents.length === 0) {
-    return <p className="muted">No documents yet. Upload one to get started.</p>
+    return (
+      <div className="empty-state">
+        <p>No documents yet.</p>
+        <p className="muted">Upload one above to give the assistant something to answer from.</p>
+      </div>
+    )
   }
 
   return (
-    <div>
-      {error && <p className="error">{error}</p>}
+    <div className="doc-list">
+      {error && <p className="field-error" role="alert">{error}</p>}
       {documents.map((doc) => (
-        <div className="doc-row" key={doc.id}>
-          <div>
-            <div>{doc.filename}</div>
-            <div className="muted" style={{ fontSize: 13 }}>
-              {doc.status === 'ready' && `${doc.chunkCount} chunks`}
-              {doc.status === 'processing' && 'Processing...'}
-              {doc.status === 'error' && (doc.error ?? 'Processing failed.')}
-            </div>
-          </div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-            <span className={`status ${doc.status}`}>{doc.status}</span>
-            <button className="link-button" onClick={() => remove(doc.id, doc.filename)}>
-              Delete
-            </button>
-          </div>
-        </div>
+        <DocumentRow key={doc.id} doc={doc} onDelete={remove} />
       ))}
     </div>
   )
