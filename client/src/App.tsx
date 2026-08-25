@@ -15,11 +15,12 @@ function Shell() {
       <header className="topbar">
         <Link to="/" className="brand-mark">
           <span className="brand-tab" aria-hidden="true" />
-          DocuChat
+          <span>DocuChat</span>
         </Link>
+        <span className="topbar-context">Your document workbench</span>
         <nav>
           {isDemo && <span className="demo-badge">Demo session</span>}
-          <Link to="/">Chat</Link>
+          <Link to="/">Ask</Link>
           {user?.role === 'admin' && <Link to="/admin">Documents</Link>}
           <button className="link-button" onClick={logout}>
             Sign out

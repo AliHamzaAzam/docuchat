@@ -65,6 +65,16 @@ export function IconFile(props: SVGProps<SVGSVGElement>) {
   )
 }
 
+export function IconDatabase(props: SVGProps<SVGSVGElement>) {
+  return (
+    <svg {...base(props)}>
+      <ellipse cx="10" cy="4.8" rx="6.5" ry="2.3" />
+      <path d="M3.5 4.8v5.1c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3V4.8" />
+      <path d="M3.5 9.9V15c0 1.3 2.9 2.3 6.5 2.3s6.5-1 6.5-2.3V9.9" />
+    </svg>
+  )
+}
+
 export function IconClock(props: SVGProps<SVGSVGElement>) {
   return (
     <svg {...base(props)}>
