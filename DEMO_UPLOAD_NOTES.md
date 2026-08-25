@@ -30,7 +30,12 @@ created.
 `GET /api/documents` returns shared documents for ordinary authenticated users.
 A demo session receives shared documents plus documents whose scope belongs to
 its own `demoSessionId`. It never receives another demo session's documents.
-The response fields are unchanged:
+The response includes an `owned` flag for clients that need to distinguish the
+caller's own demo uploads from shared documents:
+
+`owned` is `true` only when the caller is a demo session and the document's
+scope matches that session; it is `false` for shared documents and
+non-demo callers.
 
 ```json
 [
@@ -41,7 +46,8 @@ The response fields are unchanged:
     "error": null,
     "chunkCount": 0,
     "size": 1234,
-    "createdAt": "<iso-date>"
+    "createdAt": "<iso-date>",
+    "owned": true
   }
 ]
 ```
@@ -76,6 +82,12 @@ session's documents. A successful delete returns `{ "ok": true }`.
 ```json
 { "question": "What is the refund policy?", "conversationId": "<optional-id>" }
 ```
+
+Conversations are scoped by the same `demoSessionId` claim as documents. Demo
+sessions can list, open, and continue only their own conversations; legacy demo
+conversations without a session tag remain hidden. Demo conversations are
+removed by the same two-hour cleanup sweep as demo uploads. Ordinary users keep
+the existing user-owned behavior.
 
 Vector retrieval now filters chunks to `scopeKey: "shared"` for ordinary
 authenticated users and administrators. Demo retrieval filters to

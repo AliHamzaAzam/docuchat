@@ -11,6 +11,7 @@ import {
   DEMO_MAX_DOCUMENTS,
   DEMO_MAX_FILE_BYTES,
   isDemoSession,
+  isOwnedDemoDocument,
   requireUploadAccess,
   SHARED_SCOPE_KEY,
 } from './scope.js'
@@ -33,6 +34,7 @@ documentsRouter.get('/', requireAuth, async (req, res) => {
     chunkCount: d.chunkCount,
     size: d.size,
     createdAt: d.createdAt,
+    owned: isOwnedDemoDocument(d, req.user),
   })))
 })
 

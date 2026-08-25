@@ -1,5 +1,7 @@
 import { ChunkModel } from '../models/Chunk.js'
 import { DocumentModel } from '../models/Document.js'
+import { ConversationModel } from '../models/Conversation.js'
+import { MessageModel } from '../models/Message.js'
 
 export const DEMO_UPLOAD_TTL_MS = 2 * 60 * 60 * 1000
 
@@ -10,10 +12,25 @@ export async function cleanupExpiredDemoUploads(now = new Date()): Promise<numbe
     createdAt: { $lt: cutoff },
   }).select({ _id: 1 }).lean()
 
-  if (expired.length === 0) return 0
-
   const ids = expired.map((doc) => doc._id)
-  await ChunkModel.deleteMany({ documentId: { $in: ids } })
-  const result = await DocumentModel.deleteMany({ _id: { $in: ids } })
-  return result.deletedCount ?? 0
+  if (ids.length > 0) {
+    await ChunkModel.deleteMany({ documentId: { $in: ids } })
+  }
+  const documentResult = ids.length > 0
+    ? await DocumentModel.deleteMany({ _id: { $in: ids } })
+    : { deletedCount: 0 }
+
+  const expiredConversations = await ConversationModel.find({
+    demoSessionId: { $exists: true, $nin: [null, ''] },
+    createdAt: { $lt: cutoff },
+  }).select({ _id: 1 }).lean()
+  const conversationIds = expiredConversations.map((conversation) => conversation._id)
+  if (conversationIds.length > 0) {
+    await MessageModel.deleteMany({ conversationId: { $in: conversationIds } })
+  }
+  const conversationResult = conversationIds.length > 0
+    ? await ConversationModel.deleteMany({ _id: { $in: conversationIds } })
+    : { deletedCount: 0 }
+
+  return (documentResult.deletedCount ?? 0) + (conversationResult.deletedCount ?? 0)
 }

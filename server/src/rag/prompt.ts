@@ -3,6 +3,10 @@ import type { RetrievedChunk } from './types.js'
 export const NO_CONTEXT_RESPONSE =
   'I do not know. I could not find anything in the uploaded documents that answers that question.'
 
+export function isNoContextResponse(answer: string): boolean {
+  return answer.trim() === NO_CONTEXT_RESPONSE
+}
+
 export function buildGroundedPrompt(question: string, chunks: RetrievedChunk[]): string {
   const context = chunks
     .map((c, i) => `[Source ${i + 1}: ${c.filename}]\n${c.content}`)

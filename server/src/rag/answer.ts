@@ -1,6 +1,6 @@
 import { retrieve } from './retriever.js'
 import { getLlmProvider } from './provider.js'
-import { buildGroundedPrompt, NO_CONTEXT_RESPONSE } from './prompt.js'
+import { buildGroundedPrompt, isNoContextResponse, NO_CONTEXT_RESPONSE } from './prompt.js'
 import type { AnswerResult, LlmProvider, RetrievedChunk, SourceRef } from './types.js'
 
 const SNIPPET_LENGTH = 200
@@ -38,6 +38,10 @@ export async function answerQuestion(
 
   const llm = deps.llm ?? getLlmProvider()
   const answer = await llm.generate(buildGroundedPrompt(question, chunks))
+
+  if (isNoContextResponse(answer)) {
+    return { answer, sources: [], grounded: false }
+  }
 
   return { answer, sources: toSources(chunks), grounded: true }
 }

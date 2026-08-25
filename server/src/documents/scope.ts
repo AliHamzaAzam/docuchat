@@ -34,3 +34,10 @@ export function buildDocumentScope(user?: TokenPayload): Record<string, unknown>
 export function buildOwnDemoDocumentScope(sessionId: string): Record<string, unknown> {
   return { demoSessionId: sessionId, scopeKey: sessionId }
 }
+
+export function isOwnedDemoDocument(
+  document: { scopeKey?: string | null },
+  user?: TokenPayload,
+): boolean {
+  return isDemoSession(user) && document.scopeKey === user.demoSessionId
+}

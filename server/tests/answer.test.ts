@@ -39,6 +39,17 @@ describe('answerQuestion', () => {
     expect(result.sources).toEqual([])
   })
 
+  it('treats the canonical model refusal as ungrounded even when context was retrieved', async () => {
+    const result = await answerQuestion('Unrelated question?', {
+      retrieveFn: async () => chunks,
+      llm: stubLlm(`${NO_CONTEXT_RESPONSE}\n`),
+    })
+
+    expect(result.answer).toBe(`${NO_CONTEXT_RESPONSE}\n`)
+    expect(result.grounded).toBe(false)
+    expect(result.sources).toEqual([])
+  })
+
   it('truncates long chunk content into a short citation snippet', async () => {
     const long = 'x'.repeat(500)
     const result = await answerQuestion('q', {
