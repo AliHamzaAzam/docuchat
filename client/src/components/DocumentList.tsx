@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from '../api/client'
+import { DocumentPreview } from './DocumentPreview'
 import { DocumentRow, type DocumentSummary } from './DocumentRow'
 
 export type { DocumentSummary }
@@ -12,6 +13,7 @@ export function DocumentList({
   onChanged: () => void
 }) {
   const [error, setError] = useState<string | null>(null)
+  const [previewDoc, setPreviewDoc] = useState<DocumentSummary | null>(null)
 
   async function remove(doc: DocumentSummary) {
     if (!confirm(`Delete "${doc.filename}"? Its content will no longer be used in answers.`)) return
@@ -34,11 +36,14 @@ export function DocumentList({
   }
 
   return (
-    <div className="doc-list">
-      {error && <p className="field-error" role="alert">{error}</p>}
-      {documents.map((doc) => (
-        <DocumentRow key={doc.id} doc={doc} onDelete={remove} />
-      ))}
-    </div>
+    <>
+      <div className="doc-list">
+        {error && <p className="field-error" role="alert">{error}</p>}
+        {documents.map((doc) => (
+          <DocumentRow key={doc.id} doc={doc} onDelete={remove} onPreview={setPreviewDoc} />
+        ))}
+      </div>
+      {previewDoc && <DocumentPreview doc={previewDoc} onClose={() => setPreviewDoc(null)} />}
+    </>
   )
 }

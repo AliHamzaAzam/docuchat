@@ -1,6 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api, setAuthToken } from '../api/client'
-import { clearOwnDocumentIds } from '../demo/ownDocuments'
 
 type User = { email: string; role: 'admin' | 'user' }
 
@@ -41,10 +40,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem('user', JSON.stringify(res.user))
     if (demo) {
       localStorage.setItem('isDemo', '1')
-      // A fresh demo login mints a new server-side session; last session's
-      // uploads are no longer visible to it, so its local "mine" list is
-      // stale and must be cleared to match.
-      clearOwnDocumentIds()
     } else {
       localStorage.removeItem('isDemo')
     }
@@ -65,7 +60,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.removeItem('token')
       localStorage.removeItem('user')
       localStorage.removeItem('isDemo')
-      clearOwnDocumentIds()
     },
   }
 

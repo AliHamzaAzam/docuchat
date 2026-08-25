@@ -30,10 +30,13 @@ export function AdminPage() {
   return (
     <div className="page">
       <header className="page-header">
-        <h1>Documents</h1>
+        <div>
+          <span className="section-label">Demo seed library</span>
+          <h1>Documents</h1>
+        </div>
         <p className="muted">
-          Upload PDF, DOCX, or TXT files. Their content becomes the only material the assistant can answer from,
-          shared with every visitor.
+          Upload PDF, DOCX, or TXT files. Every upload here becomes part of the read-only library visible to demo
+          sessions. Registered users' own documents stay private to their account and never appear here.
         </p>
       </header>
 

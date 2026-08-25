@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, ApiError } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
 import { ChatMessage, type ChatMessageData } from '../components/ChatMessage'
 import { ConversationSidebar, type ConversationSummary } from '../components/ConversationSidebar'
 import { DocumentsPanel } from '../components/DocumentsPanel'
-import { IconFile, IconMenu, IconMessage, IconSend } from '../components/Icon'
+import { IconClose, IconFile, IconMenu, IconMessage, IconSend } from '../components/Icon'
 
 export function ChatPage() {
-  const { isDemo } = useAuth()
+  const { isDemo, user } = useAuth()
   const [conversations, setConversations] = useState<ConversationSummary[]>([])
   const [conversationsLoading, setConversationsLoading] = useState(true)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -17,6 +17,23 @@ export function ChatPage() {
   const [error, setError] = useState<string | null>(null)
   const [sidebarTab, setSidebarTab] = useState<'chats' | 'documents'>('chats')
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
+  const mobileNavToggleRef = useRef<HTMLButtonElement>(null)
+
+  // Match the same Escape-to-close and focus-return behavior as the document
+  // preview dialog, so every overlay in the app closes the same way for
+  // keyboard users instead of only the backdrop click working here.
+  useEffect(() => {
+    if (!mobileNavOpen) return
+    const toggleButton = mobileNavToggleRef.current
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') setMobileNavOpen(false)
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('keydown', closeOnEscape)
+      toggleButton?.focus()
+    }
+  }, [mobileNavOpen])
 
   useEffect(() => {
     api
@@ -28,6 +45,14 @@ export function ChatPage() {
 
   async function loadConversations() {
     setConversations(await api.get('/api/conversations'))
+  }
+
+  async function handleConversationDeleted(id: string) {
+    if (activeId === id) {
+      setActiveId(null)
+      setMessages([])
+    }
+    await loadConversations()
   }
 
   async function openConversation(id: string) {
@@ -84,17 +109,36 @@ export function ChatPage() {
     }
   }
 
-  const showTabs = isDemo
+  const showTabs = isDemo || user?.role === 'user'
+  const prompts = isDemo
+    ? [
+        'How many paid holiday days do full-time employees receive?',
+        'What is the warranty period for a Northwind Robotics unit?',
+        'How long does standard shipping take?',
+      ]
+    : ['What are the key facts in my documents?', 'Which requirements are stated in the documents?', 'What dates or deadlines are mentioned?']
 
   return (
     <div className="chat-shell">
-      <button className="mobile-nav-toggle" onClick={() => setMobileNavOpen(true)} aria-label="Open menu">
+      <button
+        ref={mobileNavToggleRef}
+        className="mobile-nav-toggle"
+        onClick={() => setMobileNavOpen(true)}
+        aria-label="Open menu"
+        aria-expanded={mobileNavOpen}
+      >
         <IconMenu />
       </button>
 
       {mobileNavOpen && <div className="nav-backdrop" onClick={() => setMobileNavOpen(false)} />}
 
-      <aside className={`sidebar${mobileNavOpen ? ' open' : ''}`}>
+      <aside
+        className={`sidebar${mobileNavOpen ? ' open' : ''}`}
+        {...(mobileNavOpen ? { role: 'dialog', 'aria-modal': true, 'aria-label': 'Workspace menu' } : {})}
+      >
+        <button className="icon-button sidebar-close" onClick={() => setMobileNavOpen(false)} aria-label="Close menu">
+          <IconClose />
+        </button>
         {showTabs && (
           <div className="sidebar-tabs" role="tablist">
             <button
@@ -125,22 +169,39 @@ export function ChatPage() {
             loading={conversationsLoading}
             onSelect={openConversation}
             onNew={newChat}
+            onDeleted={handleConversationDeleted}
           />
         ) : (
-          <DocumentsPanel />
+          <DocumentsPanel isDemo={isDemo} />
         )}
       </aside>
 
       <section className="chat-main">
+        <div className="chat-main-head">
+          <div>
+            <span className="section-label">Evidence-first workspace</span>
+            <h1>{activeId ? 'Continue the conversation' : 'Ask your documents'}</h1>
+          </div>
+          <span className="evidence-pill"><span className="evidence-dot" /> Sources stay visible</span>
+        </div>
         <div className="messages">
           {messages.length === 0 && (
             <div className="chat-empty">
-              <IconMessage className="chat-empty-icon" />
-              <h2>Ask about your documents</h2>
+              <div className="chat-empty-mark" aria-hidden="true">
+                <IconMessage className="chat-empty-icon" />
+              </div>
+              <h2>Start with one clear question.</h2>
               <p className="muted">
-                Answers come only from what's uploaded, with the passages they're drawn from. Ask something the
-                documents don't cover and the assistant will say so, instead of guessing.
+                DocuChat searches the files in your workspace, then shows the passages behind its answer. If the
+                answer is not there, it will say so.
               </p>
+              <div className="prompt-grid" aria-label="Question ideas">
+                {prompts.map((prompt) => (
+                  <button type="button" key={prompt} onClick={() => setQuestion(prompt)}>
+                    {prompt}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
           {messages.map((m) => (
@@ -165,10 +226,12 @@ export function ChatPage() {
         )}
 
         <form onSubmit={send} className="composer">
+          <label className="composer-label" htmlFor="question-input">Ask your documents</label>
           <input
+            id="question-input"
             value={question}
             onChange={(e) => setQuestion(e.target.value)}
-            placeholder="Ask a question about your documents"
+            placeholder="Try a question about the files in this workspace"
             disabled={busy}
             aria-label="Your question"
           />
