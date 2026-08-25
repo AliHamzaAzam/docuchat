@@ -38,6 +38,27 @@ documentsRouter.get('/', requireAuth, async (req, res) => {
   })))
 })
 
+documentsRouter.get('/:id/preview', requireAuth, async (req, res) => {
+  const doc = await DocumentModel.findOne({ _id: req.params.id, ...buildDocumentScope(req.user) } as any).lean()
+  if (!doc) return res.status(404).json({ error: 'Document not found.' })
+
+  if (doc.status !== 'ready') {
+    return res.status(409).json({ error: doc.status === 'processing' ? 'This document is still being processed.' : doc.error ?? 'This document could not be previewed.' })
+  }
+
+  const chunks = await ChunkModel.find({ documentId: doc._id }).sort({ position: 1 }).select({ content: 1, _id: 0 }).lean()
+  const text = chunks.map((chunk) => chunk.content).join('\n\n')
+  const maxPreviewCharacters = 300_000
+
+  res.json({
+    id: String(doc._id),
+    filename: doc.filename,
+    status: doc.status,
+    text: text.slice(0, maxPreviewCharacters),
+    truncated: text.length > maxPreviewCharacters,
+  })
+})
+
 documentsRouter.get('/:id/status', requireAuth, async (req, res) => {
   const doc = await DocumentModel.findOne({ _id: req.params.id, ...buildDocumentScope(req.user) } as any).lean()
   if (!doc) return res.status(404).json({ error: 'Document not found.' })

@@ -35,6 +35,12 @@ describe('createApp', () => {
     expect(res.status).toBe(401)
   })
 
+  it('rejects an unauthenticated document preview request with 401', async () => {
+    const app = createApp()
+    const res = await request(app).get('/api/documents/document-id/preview')
+    expect(res.status).toBe(401)
+  })
+
   it('rejects an unauthenticated conversation list with 401', async () => {
     const app = createApp()
     const res = await request(app).get('/api/conversations')
