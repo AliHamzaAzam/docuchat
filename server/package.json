@@ -10,6 +10,8 @@
     "start": "node dist/src/index.js",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
+    "generate:demo-fixtures": "tsx scripts/generate-demo-fixtures.ts",
+    "migrate:privacy": "tsx scripts/migrate-privacy.ts",
     "verify:vector": "tsx scripts/verify-vector-search.ts",
     "recreate:chunk-index": "tsx scripts/recreate-chunk-vector-index.ts",
     "seed": "tsx scripts/seed.ts"

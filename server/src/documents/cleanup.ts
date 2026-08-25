@@ -8,6 +8,7 @@ export const DEMO_UPLOAD_TTL_MS = 2 * 60 * 60 * 1000
 export async function cleanupExpiredDemoUploads(now = new Date()): Promise<number> {
   const cutoff = new Date(now.getTime() - DEMO_UPLOAD_TTL_MS)
   const expired = await DocumentModel.find({
+    isSeed: { $ne: true },
     demoSessionId: { $exists: true, $nin: [null, ''] },
     createdAt: { $lt: cutoff },
   }).select({ _id: 1 }).lean()

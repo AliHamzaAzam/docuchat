@@ -1,8 +1,8 @@
 # Demo uploads and API limits
 
-This change is server-side only. The client can continue using the existing
-document and chat routes, but demo sessions now receive a private upload scope
-and the API returns rate-limit errors when a client exceeds a configured limit.
+This change is server-side only. The existing document and chat routes remain
+usable, but every authenticated user's data is now private and demo sessions
+also receive a read-only seed corpus plus private example conversations.
 
 ## Demo authentication
 
@@ -19,7 +19,12 @@ Every successful demo login creates a fresh UUID and places it in the JWT as
 the `demoSessionId` claim. The claim is not added to ordinary register or
 password-login tokens. The frontend should keep using the returned bearer
 token for all subsequent requests. Two browsers using the shared demo account
-therefore have different document scopes.
+therefore have different document and conversation scopes.
+
+Demo login also copies the committed demo conversation fixtures into the new
+session. The copies are ordinary private conversations: visitors can continue
+them through `POST /api/conversations/chat` or delete them through
+`DELETE /api/conversations/:id`.
 
 Expired demo uploads are removed during demo login and by a server cleanup
 sweep every 15 minutes. An upload expires two hours after its document was
@@ -27,15 +32,16 @@ created.
 
 ## Document routes
 
-`GET /api/documents` returns shared documents for ordinary authenticated users.
-A demo session receives shared documents plus documents whose scope belongs to
-its own `demoSessionId`. It never receives another demo session's documents.
+`GET /api/documents` returns only documents owned by the authenticated caller.
+Registered users see their own uploads, administrators see the admin-curated
+seed corpus, and a demo session sees the seed corpus plus documents whose scope
+belongs to its own `demoSessionId`. No caller sees another registered user's or
+demo session's private uploads.
 The response includes an `owned` flag for clients that need to distinguish the
 caller's own demo uploads from shared documents:
 
-`owned` is `true` only when the caller is a demo session and the document's
-scope matches that session; it is `false` for shared documents and
-non-demo callers.
+`owned` is `true` only for a caller's own upload and `false` for seed documents.
+It is also `false` for an admin viewing the seed corpus.
 
 ```json
 [
@@ -57,9 +63,10 @@ document is not visible to the caller. Its response fields are unchanged:
 `id`, `status`, `error`, and `chunkCount`.
 
 `POST /api/documents` continues to accept a multipart form field named
-`file`. Administrators can upload unlimited documents and all administrator
-uploads are shared. Demo sessions can upload only PDF, DOCX, and TXT files,
-with these caps:
+`file`. Registered users can upload private PDF, DOCX, and TXT documents.
+Administrators curate the demo seed corpus: every admin upload is marked as a
+seed document visible to demo sessions. Demo uploads remain private to the
+current session and support these caps:
 
 - 3 active documents per demo session. Processing and ready documents count;
   errored documents do not.
@@ -70,10 +77,10 @@ limit. Demo files are rejected at 2 MB with HTTP 413. Reaching the active demo
 document cap returns HTTP 409. The successful 202 response remains:
 `{ "id", "filename", "status" }`.
 
-`DELETE /api/documents/:id` remains available to administrators for any
-document. A demo session may delete only its own demo upload. Ordinary users
-cannot delete documents, and a demo session cannot delete shared or another
-session's documents. A successful delete returns `{ "ok": true }`.
+`DELETE /api/documents/:id` is scoped to the caller. Registered users can delete
+their own private documents, administrators can delete seed documents they
+curate, and demo sessions can delete only their own uploads. Seed documents are
+read-only to demo sessions. A successful delete returns `{ "ok": true }`.
 
 ## Chat and retrieval
 
@@ -83,16 +90,34 @@ session's documents. A successful delete returns `{ "ok": true }`.
 { "question": "What is the refund policy?", "conversationId": "<optional-id>" }
 ```
 
-Conversations are scoped by the same `demoSessionId` claim as documents. Demo
-sessions can list, open, and continue only their own conversations; legacy demo
-conversations without a session tag remain hidden. Demo conversations are
-removed by the same two-hour cleanup sweep as demo uploads. Ordinary users keep
-the existing user-owned behavior.
+Conversations are private by `userId` for registered users and administrators.
+Demo sessions are additionally scoped by their `demoSessionId`, so they can
+list, open, continue, and delete only their own conversations. Demo fixture
+conversations are copied into each session as private records. Legacy demo
+conversations are removed by the privacy migration and future demo
+conversations are removed by the same two-hour cleanup sweep as demo uploads.
 
-Vector retrieval now filters chunks to `scopeKey: "shared"` for ordinary
-authenticated users and administrators. Demo retrieval filters to
-`scopeKey: "shared"` or the current session UUID. Chat sources therefore
-cannot cite another demo session's chunks. The response shape is unchanged.
+Vector retrieval filters chunks to the caller's private `scopeKey`. Registered
+users retrieve only their own user scope, administrators retrieve the seed
+scope, and demos retrieve the seed scope plus their current session UUID. Chat
+sources therefore cannot cite another user's or demo session's chunks. The
+response shape is unchanged.
+
+The seeded conversation fixture file is generated by the real retrieval and
+LLM pipeline with:
+
+```bash
+cd server
+npm run generate:demo-fixtures
+```
+
+The initial seed flow runs the same generation step after ingesting the seed
+documents. Fixture records store the question, grounded answer, and source
+filename/snippet; demo login resolves those sources against the current seed
+documents before copying the messages.
+
+`DELETE /api/conversations/:id` returns `{ "ok": true }` when the conversation
+belongs to the caller and 404 otherwise.
 
 ## Rate limits
 
@@ -120,13 +145,17 @@ Every rate-limited route returns HTTP 429 with this JSON shape:
 
 Documents and chunks now carry:
 
-- `demoSessionId`: `null` for shared records or the UUID of the owning demo
-  browser session.
-- `scopeKey`: `shared` for shared records or the owning demo session UUID.
+- `uploadedBy`: the owning user ID for private documents.
+- `isSeed`: `true` for admin-curated seed documents.
+- `demoSessionId`: `null` for registered/admin records or the UUID of the
+  owning demo browser session.
+- `scopeKey`: the owning registered user ID, the owning demo session UUID, or
+  `demo-seed` for seed records.
 
-The migration chose to backfill legacy records as shared instead of relying on
-missing-field behavior in Atlas Vector Search. The live run backfilled 2
-documents and 2 chunks.
+Run `npm run migrate:privacy` once against the production database to classify
+legacy documents/chunks and purge all existing demo conversations. The script
+does not print or inspect secret values. The live migration must be reported
+with its document and purge counts.
 
 `chunk_vector_index` is recreated by:
 
@@ -153,5 +182,5 @@ The script drops the prior index, creates this definition, polls
 ## Verification
 
 - `cd server && npx tsc --noEmit`: passed.
-- `cd server && npm test -- --run`: 9 test files, 53 tests passed.
+- `cd server && npm test -- --run`: all server unit tests passed.
 - Live Atlas index migration: completed; `chunk_vector_index` is queryable.

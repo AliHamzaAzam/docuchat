@@ -1,0 +1,28 @@
+[
+  {
+    "id": "holiday-allowance",
+    "title": "Holiday allowance",
+    "question": "How many paid holiday days do full-time employees receive?",
+    "answer": "Full-time employees receive 25 days of paid holiday per year, in addition to public holidays, as stated in the \"Northwind Robotics Employee Handbook\" (handbook.txt).",
+    "grounded": true,
+    "sources": [
+      {
+        "filename": "handbook.txt",
+        "snippet": "Northwind Robotics Employee Handbook\n\nHoliday allowance\nFull-time employees receive 25 days of paid holiday per year, in addition to\npublic holidays. Holiday accrues monthly and unused days do not car..."
+      }
+    ]
+  },
+  {
+    "id": "product-warranty",
+    "title": "Product warranty",
+    "question": "What is the warranty period for a Northwind Robotics unit?",
+    "answer": "The warranty period for a Northwind Robotics unit is 24 months, covering manufacturing defects, as stated in the Northwind Robotics Product FAQ (Source 1: product-faq.txt).",
+    "grounded": true,
+    "sources": [
+      {
+        "filename": "product-faq.txt",
+        "snippet": "Northwind Robotics Product FAQ\n\nWhat is the warranty period?\nAll robotics units carry a 24 month warranty covering manufacturing defects.\nDamage from misuse is not covered.\n\nHow long does shipping tak..."
+      }
+    ]
+  }
+]

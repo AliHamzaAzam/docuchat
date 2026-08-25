@@ -11,8 +11,9 @@ const documentSchema = new Schema({
   error: { type: String },
   chunkCount: { type: Number, default: 0 },
   uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  isSeed: { type: Boolean, default: false, index: true },
   demoSessionId: { type: String, default: null, index: true },
-  scopeKey: { type: String, default: 'shared', index: true },
+  scopeKey: { type: String, required: true, index: true },
 }, { timestamps: true })
 
 export type DocumentDoc = InferSchemaType<typeof documentSchema> & Timestamps

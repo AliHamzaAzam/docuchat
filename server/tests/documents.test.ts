@@ -1,21 +1,30 @@
 import { describe, it, expect } from 'vitest'
-import { buildDocumentScope, buildOwnDemoDocumentScope, DEMO_MAX_DOCUMENTS, DEMO_MAX_FILE_BYTES, isDemoSession, isOwnedDemoDocument } from '../src/documents/scope.js'
+import { buildDocumentScope, buildOwnDemoDocumentScope, buildRetrievalScope, DEMO_MAX_DOCUMENTS, DEMO_MAX_FILE_BYTES, DEMO_SEED_SCOPE_KEY, isDemoSession, isOwnedDemoDocument } from '../src/documents/scope.js'
 
-describe('demo document scoping', () => {
-  it('keeps ordinary users on shared documents', () => {
+describe('document scoping', () => {
+  it('keeps registered users on their own private documents', () => {
     expect(buildDocumentScope({ userId: 'user', role: 'user' })).toEqual({
-      $or: [{ scopeKey: 'shared' }, { scopeKey: { $exists: false } }],
+      isSeed: { $ne: true },
+      uploadedBy: 'user',
+      scopeKey: 'user',
     })
+    expect(buildRetrievalScope({ userId: 'user', role: 'user' })).toEqual(['user'])
   })
 
-  it('includes shared and only the current demo session', () => {
+  it('includes seed documents and only the current demo session uploads', () => {
     expect(buildDocumentScope({ userId: 'user', role: 'user', demoSessionId: 'session-a' })).toEqual({
       $or: [
-        { $or: [{ scopeKey: 'shared' }, { scopeKey: { $exists: false } }] },
-        { scopeKey: 'session-a' },
+        { isSeed: true, scopeKey: DEMO_SEED_SCOPE_KEY },
+        { isSeed: { $ne: true }, demoSessionId: 'session-a', scopeKey: 'session-a' },
       ],
     })
-    expect(buildOwnDemoDocumentScope('session-a')).toEqual({ demoSessionId: 'session-a', scopeKey: 'session-a' })
+    expect(buildOwnDemoDocumentScope('session-a')).toEqual({ isSeed: { $ne: true }, demoSessionId: 'session-a', scopeKey: 'session-a' })
+    expect(buildRetrievalScope({ userId: 'user', role: 'user', demoSessionId: 'session-a' })).toEqual([DEMO_SEED_SCOPE_KEY, 'session-a'])
+  })
+
+  it('gives administrators the seed corpus for curation', () => {
+    expect(buildDocumentScope({ userId: 'admin', role: 'admin' })).toEqual({ isSeed: true, scopeKey: DEMO_SEED_SCOPE_KEY })
+    expect(buildRetrievalScope({ userId: 'admin', role: 'admin' })).toEqual([DEMO_SEED_SCOPE_KEY])
   })
 
   it('does not classify an ordinary user token as a demo session', () => {
@@ -30,9 +39,10 @@ describe('demo document scoping', () => {
 
   it('marks only the current demo session documents as owned', () => {
     const user = { userId: 'user', role: 'user' as const, demoSessionId: 'session-a' }
-    expect(isOwnedDemoDocument({ scopeKey: 'session-a' }, user)).toBe(true)
-    expect(isOwnedDemoDocument({ scopeKey: 'shared' }, user)).toBe(false)
+    expect(isOwnedDemoDocument({ scopeKey: 'session-a', isSeed: false }, user)).toBe(true)
+    expect(isOwnedDemoDocument({ scopeKey: DEMO_SEED_SCOPE_KEY, isSeed: true }, user)).toBe(false)
     expect(isOwnedDemoDocument({ scopeKey: 'session-b' }, user)).toBe(false)
     expect(isOwnedDemoDocument({ scopeKey: 'session-a' }, { userId: 'user', role: 'user' })).toBe(false)
+    expect(isOwnedDemoDocument({ scopeKey: 'user', uploadedBy: 'user' }, { userId: 'user', role: 'user' })).toBe(true)
   })
 })

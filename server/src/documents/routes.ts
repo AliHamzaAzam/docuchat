@@ -13,7 +13,7 @@ import {
   isDemoSession,
   isOwnedDemoDocument,
   requireUploadAccess,
-  SHARED_SCOPE_KEY,
+  DEMO_SEED_SCOPE_KEY,
 } from './scope.js'
 import { uploadRateLimiter } from '../config/rateLimit.js'
 
@@ -54,6 +54,7 @@ documentsRouter.post('/', requireAuth, requireUploadAccess, uploadRateLimiter, u
 
   const user = req.user!
   const demo = isDemoSession(user)
+  const seed = user.role === 'admin'
   if (demo && file.size > DEMO_MAX_FILE_BYTES) {
     return res.status(413).json({ error: 'Demo uploads are limited to 2 MB per file.' })
   }
@@ -61,6 +62,7 @@ documentsRouter.post('/', requireAuth, requireUploadAccess, uploadRateLimiter, u
   if (demo) {
     const activeCount = await DocumentModel.countDocuments({
       demoSessionId: user.demoSessionId,
+      isSeed: { $ne: true },
       status: { $in: ['processing', 'ready'] },
     })
     if (activeCount >= DEMO_MAX_DOCUMENTS) {
@@ -68,7 +70,7 @@ documentsRouter.post('/', requireAuth, requireUploadAccess, uploadRateLimiter, u
     }
   }
 
-  const scopeKey = demo ? user.demoSessionId : SHARED_SCOPE_KEY
+  const scopeKey = seed ? DEMO_SEED_SCOPE_KEY : demo ? user.demoSessionId : user.userId
 
   const doc = await DocumentModel.create({
     filename: file.originalname,
@@ -76,6 +78,7 @@ documentsRouter.post('/', requireAuth, requireUploadAccess, uploadRateLimiter, u
     size: file.size,
     status: 'processing',
     uploadedBy: user.userId,
+    isSeed: seed,
     demoSessionId: demo ? user.demoSessionId : null,
     scopeKey,
   })
@@ -91,13 +94,13 @@ documentsRouter.post('/', requireAuth, requireUploadAccess, uploadRateLimiter, u
 })
 
 documentsRouter.delete('/:id', requireAuth, async (req, res) => {
-  if (req.user!.role !== 'admin' && !isDemoSession(req.user)) {
-    return res.status(403).json({ error: 'Only administrators or the demo upload owner can delete documents.' })
-  }
+  if (!req.user) return res.status(401).json({ error: 'Authentication required.' })
 
-  const query = req.user!.role === 'admin'
-    ? { _id: req.params.id }
-    : { _id: req.params.id, ...buildOwnDemoDocumentScope(req.user!.demoSessionId!) }
+  const query = req.user.role === 'admin'
+    ? { _id: req.params.id, uploadedBy: req.user.userId, isSeed: true }
+    : isDemoSession(req.user)
+      ? { _id: req.params.id, ...buildOwnDemoDocumentScope(req.user.demoSessionId) }
+      : { _id: req.params.id, ...buildDocumentScope(req.user) }
   const doc = await DocumentModel.findOne(query as any)
   if (!doc) return res.status(404).json({ error: 'Document not found.' })
 

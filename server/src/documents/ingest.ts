@@ -3,7 +3,7 @@ import { ChunkModel } from '../models/Chunk.js'
 import { chunkText } from '../rag/chunker.js'
 import { getEmbeddingProvider } from '../rag/provider.js'
 import { extractText } from './parse.js'
-import { SHARED_SCOPE_KEY } from './scope.js'
+import { DEMO_SEED_SCOPE_KEY } from './scope.js'
 
 const EMBED_BATCH_SIZE = 50
 
@@ -11,7 +11,7 @@ export async function ingestDocument(
   documentId: string,
   buffer: Buffer,
   mimeType: string,
-  scope: { demoSessionId?: string | null; scopeKey?: string } = {},
+  scope: { demoSessionId?: string | null; scopeKey: string },
 ): Promise<void> {
   try {
     const text = await extractText(buffer, mimeType)
@@ -37,8 +37,9 @@ export async function ingestDocument(
           content,
           embedding: vectors[j],
           position: position++,
+          isSeed: scope.scopeKey === DEMO_SEED_SCOPE_KEY,
           demoSessionId: scope.demoSessionId ?? null,
-          scopeKey: scope.scopeKey ?? SHARED_SCOPE_KEY,
+          scopeKey: scope.scopeKey,
         })),
       )
     }

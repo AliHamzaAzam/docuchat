@@ -1,9 +1,7 @@
 import mongoose from 'mongoose'
 import { connectDb, disconnectDb } from '../src/db/connect.js'
-import { SHARED_SCOPE_KEY } from '../src/documents/scope.js'
 
 const COLLECTION = 'chunks'
-const DOCUMENTS_COLLECTION = 'documents'
 const INDEX = 'chunk_vector_index'
 const DIMS = 768
 const POLL_INTERVAL_MS = 5_000
@@ -15,15 +13,6 @@ async function main() {
   if (!db) throw new Error('No database handle')
 
   const chunks = db.collection(COLLECTION)
-  const documents = db.collection(DOCUMENTS_COLLECTION)
-
-  // Existing seed and admin records predate scopeKey. Backfill them as shared
-  // so the Atlas filter can use a string field and keep those records visible.
-  const sharedBackfill = { $set: { demoSessionId: null, scopeKey: SHARED_SCOPE_KEY } }
-  const documentBackfill = await documents.updateMany({ scopeKey: { $exists: false } }, sharedBackfill)
-  const chunkBackfill = await chunks.updateMany({ scopeKey: { $exists: false } }, sharedBackfill)
-  console.log(`Backfilled ${documentBackfill.modifiedCount} documents and ${chunkBackfill.modifiedCount} chunks as shared.`)
-
   const indexes = await chunks.listSearchIndexes().toArray()
   if (indexes.some((index: any) => index.name === INDEX)) {
     await chunks.dropSearchIndex(INDEX)

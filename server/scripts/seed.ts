@@ -6,8 +6,12 @@ import { connectDb, disconnectDb } from '../src/db/connect.js'
 import { UserModel } from '../src/models/User.js'
 import { DocumentModel } from '../src/models/Document.js'
 import { ChunkModel } from '../src/models/Chunk.js'
+import { ConversationModel } from '../src/models/Conversation.js'
+import { MessageModel } from '../src/models/Message.js'
 import { BootstrapModel, ADMIN_CLAIM_ID } from '../src/models/Bootstrap.js'
 import { ingestDocument } from '../src/documents/ingest.js'
+import { DEMO_SEED_SCOPE_KEY } from '../src/documents/scope.js'
+import { generateDemoConversationFixtures } from '../src/demo/fixtures.js'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const SEED_DIR = join(here, '..', 'seed-docs')
@@ -17,6 +21,8 @@ async function main() {
 
   await ChunkModel.deleteMany({})
   await DocumentModel.deleteMany({})
+  await MessageModel.deleteMany({})
+  await ConversationModel.deleteMany({})
   await UserModel.deleteMany({})
   await BootstrapModel.deleteMany({})
 
@@ -59,10 +65,15 @@ async function main() {
       size: buffer.length,
       status: 'processing',
       uploadedBy: admin._id,
+      isSeed: true,
+      scopeKey: DEMO_SEED_SCOPE_KEY,
     })
-    await ingestDocument(String(doc._id), buffer, 'text/plain')
+    await ingestDocument(String(doc._id), buffer, 'text/plain', { scopeKey: DEMO_SEED_SCOPE_KEY })
     console.log(`Seeded ${filename}`)
   }
+
+  await generateDemoConversationFixtures()
+  console.log('Generated demo conversation fixtures.')
 
   console.log('Seed complete.')
   await disconnectDb()

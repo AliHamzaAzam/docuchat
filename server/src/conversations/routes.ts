@@ -6,6 +6,7 @@ import { answerQuestion } from '../rag/answer.js'
 import { isRateLimitError } from '../rag/provider.js'
 import { chatRateLimiter } from '../config/rateLimit.js'
 import { isDemoSession } from '../documents/scope.js'
+import { buildRetrievalScope } from '../documents/scope.js'
 import { buildConversationScope } from './scope.js'
 
 export const conversationsRouter = Router()
@@ -15,7 +16,7 @@ function titleFrom(question: string): string {
 }
 
 conversationsRouter.get('/', requireAuth, async (req, res) => {
-  const list = await ConversationModel.find({ userId: req.user!.userId, ...buildConversationScope(req.user) })
+  const list = await ConversationModel.find(buildConversationScope(req.user) as any)
     .sort({ updatedAt: -1 })
     .lean()
   res.json(list.map((c) => ({ id: String(c._id), title: c.title, updatedAt: c.updatedAt })))
@@ -24,7 +25,6 @@ conversationsRouter.get('/', requireAuth, async (req, res) => {
 conversationsRouter.get('/:id', requireAuth, async (req, res) => {
   const convo = await ConversationModel.findOne({
     _id: req.params.id,
-    userId: req.user!.userId,
     ...buildConversationScope(req.user),
   }).lean()
   if (!convo) return res.status(404).json({ error: 'Conversation not found.' })
@@ -62,11 +62,7 @@ conversationsRouter.post('/chat', requireAuth, chatRateLimiter, async (req, res)
   // rate-limited generation never leaves an orphan conversation or a lone
   // user message with no reply.
   const existing = conversationId
-    ? await ConversationModel.findOne({
-      _id: conversationId,
-      userId: req.user!.userId,
-      ...buildConversationScope(req.user),
-    })
+    ? await ConversationModel.findOne({ _id: conversationId, ...buildConversationScope(req.user) } as any)
     : null
 
   if (conversationId && !existing) {
@@ -75,7 +71,7 @@ conversationsRouter.post('/chat', requireAuth, chatRateLimiter, async (req, res)
 
   let result
   try {
-    result = await answerQuestion(String(question), { demoSessionId: req.user!.demoSessionId })
+    result = await answerQuestion(String(question), { scopeKeys: buildRetrievalScope(req.user) })
   } catch (err) {
     // Retries are already exhausted inside the provider, so reaching here means
     // the free tier is genuinely saturated rather than momentarily busy.
@@ -92,6 +88,7 @@ conversationsRouter.post('/chat', requireAuth, chatRateLimiter, async (req, res)
     (await ConversationModel.create({
       userId: req.user!.userId,
       demoSessionId: isDemoSession(req.user) ? req.user.demoSessionId : null,
+      isDemoExample: false,
       title: titleFrom(String(question)),
     }))
 
@@ -125,4 +122,13 @@ conversationsRouter.post('/chat', requireAuth, chatRateLimiter, async (req, res)
     },
     grounded: result.grounded,
   })
+})
+
+conversationsRouter.delete('/:id', requireAuth, async (req, res) => {
+  const convo = await ConversationModel.findOne({ _id: req.params.id, ...buildConversationScope(req.user) } as any)
+  if (!convo) return res.status(404).json({ error: 'Conversation not found.' })
+
+  await MessageModel.deleteMany({ conversationId: convo._id })
+  await convo.deleteOne()
+  res.json({ ok: true })
 })

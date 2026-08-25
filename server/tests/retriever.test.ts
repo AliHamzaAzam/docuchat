@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildVectorPipeline, mapAggregateRow } from '../src/rag/retriever.js'
+import { DEMO_SEED_SCOPE_KEY } from '../src/documents/scope.js'
 
 describe('buildVectorPipeline', () => {
   it('puts $vectorSearch first, which MongoDB requires', () => {
@@ -18,14 +19,19 @@ describe('buildVectorPipeline', () => {
     expect(stage.$vectorSearch.limit).toBe(4)
   })
 
-  it('filters ordinary retrieval to the shared corpus', () => {
-    const stage = buildVectorPipeline([0.1], 4)[0] as any
-    expect(stage.$vectorSearch.filter).toEqual({ scopeKey: 'shared' })
+  it('filters registered-user retrieval to that user scope', () => {
+    const stage = buildVectorPipeline([0.1], 4, ['user-a'])[0] as any
+    expect(stage.$vectorSearch.filter).toEqual({ scopeKey: 'user-a' })
   })
 
-  it('filters demo retrieval to shared and the current session', () => {
-    const stage = buildVectorPipeline([0.1], 4, 'demo-session')[0] as any
-    expect(stage.$vectorSearch.filter).toEqual({ scopeKey: { $in: ['shared', 'demo-session'] } })
+  it('filters demo retrieval to seed and the current session', () => {
+    const stage = buildVectorPipeline([0.1], 4, [DEMO_SEED_SCOPE_KEY, 'demo-session'])[0] as any
+    expect(stage.$vectorSearch.filter).toEqual({ scopeKey: { $in: [DEMO_SEED_SCOPE_KEY, 'demo-session'] } })
+  })
+
+  it('requires an explicit scope instead of falling back to shared data', () => {
+    const stage = buildVectorPipeline([0.1], 4)[0] as any
+    expect(stage.$vectorSearch.filter).toEqual({ scopeKey: { $in: [] } })
   })
 
   it('oversamples candidates by the multiplier so recall stays useful', () => {

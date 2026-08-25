@@ -5,8 +5,9 @@ const chunkSchema = new Schema({
   content: { type: String, required: true },
   embedding: { type: [Number], required: true },
   position: { type: Number, required: true },
+  isSeed: { type: Boolean, default: false, index: true },
   demoSessionId: { type: String, default: null, index: true },
-  scopeKey: { type: String, default: 'shared', index: true },
+  scopeKey: { type: String, required: true, index: true },
 })
 
 export type ChunkDoc = InferSchemaType<typeof chunkSchema>

@@ -4,6 +4,7 @@ import type { Timestamps } from './User.js'
 const conversationSchema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   demoSessionId: { type: String, default: null, index: true },
+  isDemoExample: { type: Boolean, default: false },
   title: { type: String, required: true },
 }, { timestamps: true })
 

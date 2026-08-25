@@ -6,7 +6,7 @@ describe('demo conversation scoping', () => {
   const sessionB = { userId: 'demo-user', role: 'user' as const, demoSessionId: 'session-b' }
 
   it('lists only the current demo session conversations', () => {
-    expect(buildConversationScope(sessionA)).toEqual({ demoSessionId: 'session-a' })
+    expect(buildConversationScope(sessionA)).toEqual({ userId: 'demo-user', demoSessionId: 'session-a' })
     expect(buildConversationScope(sessionA)).not.toEqual(buildConversationScope(sessionB))
   })
 
@@ -17,7 +17,7 @@ describe('demo conversation scoping', () => {
   })
 
   it('keeps ordinary users on the existing user-owned conversation behavior', () => {
-    expect(buildConversationScope({ userId: 'user', role: 'user' })).toEqual({})
+    expect(buildConversationScope({ userId: 'user', role: 'user' })).toEqual({ userId: 'user' })
     expect(isOwnedDemoConversation({ demoSessionId: 'session-a' }, { userId: 'user', role: 'user' })).toBe(false)
   })
 })

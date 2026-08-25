@@ -6,6 +6,7 @@ import { BootstrapModel, ADMIN_CLAIM_ID } from '../models/Bootstrap.js'
 import { signToken } from './jwt.js'
 import { authRateLimiter, demoLoginRateLimiter } from '../config/rateLimit.js'
 import { cleanupExpiredDemoUploads } from '../documents/cleanup.js'
+import { copyDemoConversationFixtures } from '../demo/fixtures.js'
 
 export const authRouter = Router()
 
@@ -93,6 +94,12 @@ authRouter.post('/demo', demoLoginRateLimiter, async (_req, res) => {
   const user = await UserModel.findOne({ email: DEMO_EMAIL, isDemo: true })
   if (!user) return res.status(503).json({ error: 'The demo account is not available.' })
   const demoSessionId = randomUUID()
+  try {
+    await copyDemoConversationFixtures(String(user._id), demoSessionId)
+  } catch (err) {
+    console.error('Demo fixture provisioning failed:', err)
+    return res.status(503).json({ error: 'The demo is temporarily unavailable. Please try again shortly.' })
+  }
   res.json({
     token: signToken({ userId: String(user._id), role: user.role as 'admin' | 'user', demoSessionId }),
     user: { email: user.email, role: user.role },
