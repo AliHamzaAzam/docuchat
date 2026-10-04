@@ -3,6 +3,7 @@ import { ChunkModel } from '../models/Chunk.js'
 import { chunkText } from '../rag/chunker.js'
 import { getEmbeddingProvider } from '../rag/provider.js'
 import { extractText } from './parse.js'
+import { releaseDemoDocument } from './quota.js'
 import { DEMO_SEED_SCOPE_KEY } from './scope.js'
 
 const EMBED_BATCH_SIZE = 50
@@ -22,6 +23,7 @@ export async function ingestDocument(
         status: 'error',
         error: 'No readable text was found in this file.',
       })
+      await releaseDemoDocument(scope.demoSessionId, documentId)
       return
     }
 
@@ -44,10 +46,15 @@ export async function ingestDocument(
       )
     }
 
-    await DocumentModel.findByIdAndUpdate(documentId, {
-      status: 'ready',
-      chunkCount: chunks.length,
-    })
+    const completed = await DocumentModel.findOneAndUpdate({
+      _id: documentId, scopeKey: scope.scopeKey, status: 'processing',
+    }, { status: 'ready', chunkCount: chunks.length })
+    if (!completed) {
+      // Deletion removes the parent first. If it raced with a batch insert,
+      // remove the late chunks instead of resurrecting a deleted document.
+      await ChunkModel.deleteMany({ documentId })
+      await releaseDemoDocument(scope.demoSessionId, documentId)
+    }
   } catch (err) {
     // A batch may have inserted before a later batch failed (for example a
     // rate limit that survived every retry). Remove any chunks already stored
@@ -62,10 +69,17 @@ export async function ingestDocument(
     } catch {
       // Best effort. Fall through and still record the error below.
     }
-    await DocumentModel.findByIdAndUpdate(documentId, {
-      status: 'error',
-      chunkCount: 0,
-      error: err instanceof Error ? err.message : 'Processing failed.',
-    })
+    try {
+      await DocumentModel.findByIdAndUpdate(documentId, {
+        status: 'error',
+        chunkCount: 0,
+        error: 'This document could not be processed. Try another file.',
+      })
+      await releaseDemoDocument(scope.demoSessionId, documentId)
+    } catch {
+      // The caller intentionally does not await ingest. Database outages must
+      // not escape as an unhandled rejection. Do not log provider diagnostics.
+      console.error('Document processing failed and its status could not be saved.')
+    }
   }
 }

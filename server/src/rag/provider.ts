@@ -1,4 +1,5 @@
 import { GoogleGenerativeAIEmbeddings, ChatGoogleGenerativeAI } from '@langchain/google-genai'
+import { GROUNDED_SYSTEM_PROMPT } from './prompt.js'
 import { env } from '../config/env.js'
 import type { EmbeddingProvider, LlmProvider } from './types.js'
 import { EMBEDDING_DIMENSIONS } from './types.js'
@@ -99,7 +100,7 @@ class GeminiLlm implements LlmProvider {
   })
 
   async generate(prompt: string): Promise<string> {
-    const res = await withRetry(() => this.client.invoke(prompt))
+    const res = await withRetry(() => this.client.invoke([['system', GROUNDED_SYSTEM_PROMPT], ['human', prompt]]))
     return typeof res.content === 'string' ? res.content : JSON.stringify(res.content)
   }
 }
@@ -172,7 +173,7 @@ class WorkersAiLlm implements LlmProvider {
   async generate(prompt: string): Promise<string> {
     const result = await withRetry(() =>
       workersAiRun<{ response: string }>(this.model, {
-        messages: [{ role: 'user', content: prompt }],
+        messages: [{ role: 'system', content: GROUNDED_SYSTEM_PROMPT }, { role: 'user', content: prompt }],
         temperature: 0,
         max_tokens: 1024,
       }),

@@ -12,6 +12,13 @@ export const authRouter = Router()
 
 const DEMO_EMAIL = 'demo@docuchat.app'
 
+function validCredentials(email: unknown, password: unknown): email is string {
+  return typeof email === 'string' && email.length <= 254
+    && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+    && typeof password === 'string' && password.length > 0
+    && Buffer.byteLength(password, 'utf8') <= 72
+}
+
 /**
  * Decide whether this registration becomes the admin.
  *
@@ -36,8 +43,8 @@ async function claimAdminRole(): Promise<'admin' | 'user'> {
 
 authRouter.post('/register', authRateLimiter, async (req, res) => {
   const { email, password } = req.body ?? {}
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' })
+  if (!validCredentials(email, password)) {
+    return res.status(400).json({ error: 'Enter a valid email and a password no longer than 72 bytes.' })
   }
   if (String(password).length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' })
@@ -79,8 +86,11 @@ authRouter.post('/register', authRateLimiter, async (req, res) => {
 
 authRouter.post('/login', authRateLimiter, async (req, res) => {
   const { email, password } = req.body ?? {}
+  if (!validCredentials(email, password)) {
+    return res.status(400).json({ error: 'Enter a valid email and a password no longer than 72 bytes.' })
+  }
   const user = await UserModel.findOne({ email: String(email ?? '').toLowerCase() })
-  if (!user || !(await bcrypt.compare(String(password ?? ''), user.passwordHash))) {
+  if (!user || user.isDemo || user.email === DEMO_EMAIL || !(await bcrypt.compare(String(password ?? ''), user.passwordHash))) {
     return res.status(401).json({ error: 'Incorrect email or password.' })
   }
   res.json({

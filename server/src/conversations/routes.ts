@@ -53,8 +53,15 @@ conversationsRouter.get('/:id', requireAuth, async (req, res) => {
 
 conversationsRouter.post('/chat', requireAuth, chatRateLimiter, async (req, res) => {
   const { question, conversationId } = req.body ?? {}
-  if (!question || !String(question).trim()) {
+  if (typeof question !== 'string' || !question.trim()) {
     return res.status(400).json({ error: 'Please enter a question.' })
+  }
+
+  if (question.length > 4000) {
+    return res.status(400).json({ error: 'Questions are limited to 4000 characters.' })
+  }
+  if (conversationId !== undefined && (typeof conversationId !== 'string' || !/^[a-fA-F0-9]{24}$/.test(conversationId))) {
+    return res.status(400).json({ error: 'Invalid conversation ID.' })
   }
 
   // Resolve an existing conversation up front, but do not create one yet.

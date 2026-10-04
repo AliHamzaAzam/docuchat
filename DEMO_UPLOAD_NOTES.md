@@ -15,6 +15,8 @@ also receive a read-only seed corpus plus private example conversations.
 }
 ```
 
+Demo tokens expire after two hours, including legacy demo tokens issued with a longer expiry. Ordinary password login cannot authenticate the shared demo account.
+
 Every successful demo login creates a fresh UUID and places it in the JWT as
 the `demoSessionId` claim. The claim is not added to ordinary register or
 password-login tokens. The frontend should keep using the returned bearer
@@ -72,8 +74,10 @@ current session and support these caps:
   errored documents do not.
 - 2 MB per file.
 
-The existing 10 MB Multer transport guard remains as the general parser safety
-limit. Demo files are rejected at 2 MB with HTTP 413. Reaching the active demo
+The ordinary Multer transport guard is 10 MB. Demo uploads use a 2 MB guard
+during buffering and return HTTP 413 when exceeded. Multipart requests allow
+one file and no extra fields. Atomic per-session database reservations enforce
+the three-document cap across processes running this version. Reaching the active demo
 document cap returns HTTP 409. The successful 202 response remains:
 `{ "id", "filename", "status" }`.
 
@@ -121,7 +125,11 @@ belongs to the caller and 404 otherwise.
 
 ## Rate limits
 
-Limits are per client IP. `trust proxy` is set to `1` for the Render proxy.
+Limits are per client IP and stored per server process. Forwarding headers are
+untrusted by default. Before deployment behind a proxy, configure
+`TRUSTED_PROXY_CIDRS` with the verified proxy IP addresses or CIDR ranges,
+separated by commas. Do not guess these addresses or trust arbitrary hop counts.
+Until configured, clients behind a proxy share its rate-limit budget.
 The health check is not rate limited.
 
 | Route | Limit |
@@ -179,7 +187,26 @@ The script drops the prior index, creates this definition, polls
 `listSearchIndexes`, and exits successfully only after Atlas reports
 `queryable=true`. The live cluster run completed successfully.
 
-## Verification
+## Parser and rollout limits
+
+DOCX archives are validated before Mammoth, with at most 1,000 entries and
+20 MiB of actual expanded data. Unsupported archive structures and binary or
+invalid UTF-8 text are rejected. PDFs run in isolated workers with a five-second
+deadline, 128 MiB V8 old-generation heap, 100 pages, 300,000 extracted characters,
+and at most two concurrent PDF workers per server process. V8 heap limits do
+not cover all native allocations. Parser/provider diagnostics are not exposed
+as document errors.
+
+Read scopes enforce demo expiry before storage cleanup. Retrieval rechecks
+current chunk ownership and a ready, visible parent after vector search.
+
+Upgrade all serving instances together for quota enforcement: older versions
+do not reserve slots. Quotas use a new `demoquotas` collection and MongoDB
+standard unique `_id`; no extra index migration is needed. Ambiguous writes or
+crashes can conservatively retain a slot until session cleanup. See
+[C07 security report](C07_SECURITY_REPORT.md) for tests and remaining checks.
+
+## Historical verification
 
 - `cd server && npx tsc --noEmit`: passed.
 - `cd server && npm test -- --run`: all server unit tests passed.
