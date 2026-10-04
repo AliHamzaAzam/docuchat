@@ -15,10 +15,10 @@ describe('document scoping', () => {
     expect(buildDocumentScope({ userId: 'user', role: 'user', demoSessionId: 'session-a' })).toEqual({
       $or: [
         { isSeed: true, scopeKey: DEMO_SEED_SCOPE_KEY },
-        { isSeed: { $ne: true }, demoSessionId: 'session-a', scopeKey: 'session-a' },
+        { isSeed: { $ne: true }, demoSessionId: 'session-a', scopeKey: 'session-a', createdAt: { $gt: expect.any(Date) } },
       ],
     })
-    expect(buildOwnDemoDocumentScope('session-a')).toEqual({ isSeed: { $ne: true }, demoSessionId: 'session-a', scopeKey: 'session-a' })
+    expect(buildOwnDemoDocumentScope('session-a')).toEqual({ isSeed: { $ne: true }, demoSessionId: 'session-a', scopeKey: 'session-a', createdAt: { $gt: expect.any(Date) } })
     expect(buildRetrievalScope({ userId: 'user', role: 'user', demoSessionId: 'session-a' })).toEqual([DEMO_SEED_SCOPE_KEY, 'session-a'])
   })
 

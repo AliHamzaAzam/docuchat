@@ -1,3 +1,4 @@
+import { DEMO_UPLOAD_TTL_MS } from '../documents/cleanup.js'
 import { ChunkModel } from '../models/Chunk.js'
 import { getEmbeddingProvider } from './provider.js'
 import type { EmbeddingProvider, RetrievedChunk } from './types.js'
@@ -32,6 +33,23 @@ export function buildVectorPipeline(queryVector: number[], k: number, scopeKeys:
       },
     },
     {
+      // A stale vector index or interrupted ingest must not make an orphaned,
+      // failed, deleted, or differently owned parent document retrievable.
+      $match: {
+        scopeKey: scopeFilter.scopeKey,
+        document: {
+          $elemMatch: {
+            scopeKey: { $in: scopeKeys },
+            status: 'ready',
+            $or: [
+              { demoSessionId: null },
+              { createdAt: { $gt: new Date(Date.now() - DEMO_UPLOAD_TTL_MS) } },
+            ],
+          },
+        },
+      },
+    },
+    {
       $project: {
         _id: 1,
         documentId: 1,
@@ -57,6 +75,7 @@ export async function retrieve(
   question: string,
   opts: { k?: number; embeddings?: EmbeddingProvider; scopeKeys?: string[] } = {},
 ): Promise<RetrievedChunk[]> {
+  if (!opts.scopeKeys?.length) return []
   const k = opts.k ?? DEFAULT_K
   const embeddings = opts.embeddings ?? getEmbeddingProvider()
   const queryVector = await embeddings.embedOne(question)

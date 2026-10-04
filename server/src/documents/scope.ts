@@ -1,4 +1,5 @@
 import type { NextFunction, Request, Response } from 'express'
+import { DEMO_UPLOAD_TTL_MS } from './cleanup.js'
 import type { TokenPayload } from '../auth/jwt.js'
 
 export const DEMO_SEED_SCOPE_KEY = 'demo-seed'
@@ -29,7 +30,7 @@ export function buildDocumentScope(user?: TokenPayload): Record<string, unknown>
     return {
       $or: [
         { isSeed: true, scopeKey: DEMO_SEED_SCOPE_KEY },
-        { isSeed: { $ne: true }, demoSessionId: user.demoSessionId, scopeKey: user.demoSessionId },
+        { isSeed: { $ne: true }, demoSessionId: user.demoSessionId, scopeKey: user.demoSessionId, createdAt: { $gt: new Date(Date.now() - DEMO_UPLOAD_TTL_MS) } },
       ],
     }
   }
@@ -38,7 +39,7 @@ export function buildDocumentScope(user?: TokenPayload): Record<string, unknown>
 }
 
 export function buildOwnDemoDocumentScope(sessionId: string): Record<string, unknown> {
-  return { isSeed: { $ne: true }, demoSessionId: sessionId, scopeKey: sessionId }
+  return { isSeed: { $ne: true }, demoSessionId: sessionId, scopeKey: sessionId, createdAt: { $gt: new Date(Date.now() - DEMO_UPLOAD_TTL_MS) } }
 }
 
 export function isOwnedDemoDocument(

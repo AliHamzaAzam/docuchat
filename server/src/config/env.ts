@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import { z } from 'zod'
+import { parseTrustedProxyCidrs } from './proxy.js'
 
 const schema = z
   .object({
@@ -10,6 +11,12 @@ const schema = z
     CLOUDFLARE_API_TOKEN: z.string().optional(),
     JWT_SECRET: z.string().min(1),
     PORT: z.coerce.number().default(4000),
+    TRUSTED_PROXY_CIDRS: z.string().default('').transform((value, ctx) => {
+      try { return parseTrustedProxyCidrs(value) } catch {
+        ctx.addIssue({ code: 'custom', message: 'Use explicit proxy IP addresses or nonzero CIDR ranges.' })
+        return z.NEVER
+      }
+    }),
   })
   .superRefine((cfg, ctx) => {
     if (cfg.AI_PROVIDER === 'gemini' && !cfg.GEMINI_API_KEY) {

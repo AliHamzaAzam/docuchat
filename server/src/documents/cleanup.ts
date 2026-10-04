@@ -1,3 +1,4 @@
+import { DemoQuotaModel } from '../models/DemoQuota.js'
 import { ChunkModel } from '../models/Chunk.js'
 import { DocumentModel } from '../models/Document.js'
 import { ConversationModel } from '../models/Conversation.js'
@@ -14,12 +15,12 @@ export async function cleanupExpiredDemoUploads(now = new Date()): Promise<numbe
   }).select({ _id: 1 }).lean()
 
   const ids = expired.map((doc) => doc._id)
-  if (ids.length > 0) {
-    await ChunkModel.deleteMany({ documentId: { $in: ids } })
-  }
   const documentResult = ids.length > 0
     ? await DocumentModel.deleteMany({ _id: { $in: ids } })
     : { deletedCount: 0 }
+  if (ids.length > 0) {
+    await ChunkModel.deleteMany({ documentId: { $in: ids } })
+  }
 
   const expiredConversations = await ConversationModel.find({
     demoSessionId: { $exists: true, $nin: [null, ''] },
@@ -32,6 +33,10 @@ export async function cleanupExpiredDemoUploads(now = new Date()): Promise<numbe
   const conversationResult = conversationIds.length > 0
     ? await ConversationModel.deleteMany({ _id: { $in: conversationIds } })
     : { deletedCount: 0 }
+
+  // A quota record is created after token issuance. Waiting a full token
+  // lifetime from this timestamp cannot reset the quota of an active session.
+  await DemoQuotaModel.deleteMany({ createdAt: { $lt: cutoff } })
 
   return (documentResult.deletedCount ?? 0) + (conversationResult.deletedCount ?? 0)
 }
