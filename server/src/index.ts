@@ -2,10 +2,12 @@ import { createApp } from './app.js'
 import { connectDb } from './db/connect.js'
 import { env } from './config/env.js'
 import { cleanupExpiredDemoUploads } from './documents/cleanup.js'
+import { logVectorIndexHealth } from './rag/indexHealth.js'
 
 async function main() {
   await connectDb()
   await cleanupExpiredDemoUploads()
+  void logVectorIndexHealth()
   const cleanupTimer = setInterval(() => {
     void cleanupExpiredDemoUploads().catch((err) => console.error('Demo upload cleanup failed:', err))
   }, 15 * 60 * 1000)

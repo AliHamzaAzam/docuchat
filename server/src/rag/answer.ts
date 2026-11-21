@@ -33,6 +33,7 @@ export async function answerQuestion(
   const chunks = await retrieveFn(question, { k: deps.k, scopeKeys: deps.scopeKeys })
 
   if (chunks.length === 0) {
+    console.warn(`[rag] retrieved 0 chunks across ${deps.scopeKeys?.length ?? 0} scope(s)`)
     return { answer: NO_CONTEXT_RESPONSE, sources: [], grounded: false }
   }
 
@@ -40,6 +41,7 @@ export async function answerQuestion(
   const answer = await llm.generate(buildGroundedPrompt(question, chunks))
 
   if (isNoContextResponse(answer)) {
+    console.warn(`[rag] model declined to answer from ${chunks.length} retrieved chunk(s)`)
     return { answer, sources: [], grounded: false }
   }
 
