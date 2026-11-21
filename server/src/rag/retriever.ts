@@ -1,8 +1,9 @@
 import { ChunkModel } from '../models/Chunk.js'
 import { getEmbeddingProvider } from './provider.js'
 import type { EmbeddingProvider, RetrievedChunk } from './types.js'
+import { VECTOR_INDEX_NAME } from './vectorIndex.js'
 
-export const VECTOR_INDEX_NAME = 'chunk_vector_index'
+export { VECTOR_INDEX_NAME }
 
 const DEFAULT_K = 5
 const CANDIDATE_MULTIPLIER = 20

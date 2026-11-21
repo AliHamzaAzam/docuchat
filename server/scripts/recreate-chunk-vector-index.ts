@@ -1,9 +1,9 @@
 import mongoose from 'mongoose'
 import { connectDb, disconnectDb } from '../src/db/connect.js'
+import { VECTOR_INDEX_DEFINITION, VECTOR_INDEX_NAME } from '../src/rag/vectorIndex.js'
 
 const COLLECTION = 'chunks'
-const INDEX = 'chunk_vector_index'
-const DIMS = 768
+const INDEX = VECTOR_INDEX_NAME
 const POLL_INTERVAL_MS = 5_000
 const POLL_TIMEOUT_MS = 5 * 60_000
 
@@ -22,12 +22,7 @@ async function main() {
   await chunks.createSearchIndex({
     name: INDEX,
     type: 'vectorSearch',
-    definition: {
-      fields: [
-        { type: 'vector', path: 'embedding', numDimensions: DIMS, similarity: 'cosine' },
-        { type: 'filter', path: 'scopeKey' },
-      ],
-    },
+    definition: VECTOR_INDEX_DEFINITION,
   })
   console.log(`Created ${INDEX}; waiting for Atlas to report queryable=true.`)
 
